@@ -591,11 +591,11 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
             };
 
             const orderRef = doc(collection(db, ORDERS_COLLECTION));
-            transaction.set(orderRef, finalOrderData);
+            await transaction.set(orderRef, finalOrderData);
 
             // Create main transaction for the order's full value
             const orderTransactionRef = doc(collection(db, TRANSACTIONS_COLLECTION));
-            transaction.set(orderTransactionRef, {
+            await transaction.set(orderTransactionRef, {
                 orderId: orderRef.id,
                 customerId: finalOrderData.userId,
                 customerName: finalOrderData.customerName,
@@ -609,7 +609,7 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
             // If there's a down payment, create a separate payment transaction
             if (finalOrderData.downPaymentLYD && finalOrderData.downPaymentLYD > 0) {
                 const paymentTransactionRef = doc(collection(db, TRANSACTIONS_COLLECTION));
-                transaction.set(paymentTransactionRef, {
+                await transaction.set(paymentTransactionRef, {
                     orderId: orderRef.id,
                     customerId: finalOrderData.userId,
                     customerName: finalOrderData.customerName,
@@ -621,8 +621,8 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
                 });
             }
 
-            transaction.update(userRef, {
-                orderCounter: increment(1)
+            await transaction.update(userRef, {
+                orderCounter: newOrderCount
             });
 
             return orderRef;
@@ -690,7 +690,7 @@ export async function addCustomerShippingCost(orderId: string, costInUSD: number
 
             const newSellingPrice = currentSellingPrice + costDifferenceLYD;
 
-            transaction.update(orderRef, {
+            await transaction.update(orderRef, {
                 sellingPriceLYD: newSellingPrice,
                 remainingAmount: increment(costDifferenceLYD), // Correctly increment the remaining amount
                 customerWeightCostUSD: costInUSD,
@@ -739,7 +739,7 @@ export async function setCustomerWeightDetails(orderId: string, weight: number, 
             // Delta
             const costDifference = newCustomerTotalCostLYD - oldCustomerWeightCost;
 
-            transaction.update(orderRef, {
+            await transaction.update(orderRef, {
                 sellingPriceLYD: currentSellingPrice + costDifference,
                 remainingAmount: currentRemaining + costDifference,
                 weightKG: weight,
@@ -762,7 +762,7 @@ export async function setCustomerWeightDetails(orderId: string, weight: number, 
                     amount: costDifference, // Can be negative for reductions
                     description: `تعديل وزن الزبون: ${weight} كجم (السابق: ${(oldCustomerWeightCost / (customerPricePerKilo || 1)).toFixed(2)} كجم)`
                 };
-                transaction.set(transactionRef, newTransaction);
+                await transaction.set(transactionRef, newTransaction);
             }
         });
 
@@ -1201,18 +1201,23 @@ export async function addTransaction(transactionData: Omit<Transaction, 'id'>): 
         const newTransactionRef = await runTransaction(db, async (transaction) => {
             const newDocRef = doc(collection(db, TRANSACTIONS_COLLECTION));
 
-            if (transactionData.type === 'payment' && transactionData.orderId) {
+            if (transactionData.orderId) {
                 const orderRef = doc(db, ORDERS_COLLECTION, transactionData.orderId);
                 const orderDoc = await transaction.get(orderRef);
                 if (orderDoc.exists()) {
-                    const newRemaining = (orderDoc.data().remainingAmount || 0) - transactionData.amount;
-                    transaction.update(orderRef, { remainingAmount: newRemaining < 0 ? 0 : newRemaining });
-                } else {
-                    console.log(`Order ${transactionData.orderId} not found while adding payment. It might be a TempOrder.`);
+                    const order = orderDoc.data() as Order;
+                    let newRemaining = order.remainingAmount || 0;
+                    if (transactionData.type === 'payment') {
+                        newRemaining -= transactionData.amount;
+                    } else if (transactionData.type === 'order' || transactionData.type === 'debt') {
+                        newRemaining += transactionData.amount;
+                    }
+                    // Prevent negative remaining if illogical? No, debt can be negative (credit).
+                    await transaction.update(orderRef, { remainingAmount: newRemaining < 0 ? 0 : newRemaining });
                 }
             }
 
-            transaction.set(newDocRef, transactionData);
+            await transaction.set(newDocRef, transactionData);
             return newDocRef;
         });
 
@@ -1250,14 +1255,14 @@ export async function addTempOrderPayment(tempOrderId: string, subOrderId: strin
 
             const newTotalRemaining = (tempOrderData.remainingAmount || 0) - amount;
 
-            transaction.update(tempOrderRef, {
+            await transaction.update(tempOrderRef, {
                 subOrders: newSubOrders,
                 remainingAmount: Math.max(0, newTotalRemaining)
             });
 
             if (tempOrderData.parentInvoiceId) {
                 const mainOrderRef = doc(db, ORDERS_COLLECTION, tempOrderData.parentInvoiceId);
-                transaction.update(mainOrderRef, {
+                await transaction.update(mainOrderRef, {
                     remainingAmount: increment(-amount)
                 });
             }
@@ -1367,12 +1372,13 @@ export async function updateTransaction(transactionId: string, newAmount: number
             const txData = txDoc.data() as Transaction;
             const oldAmount = txData.amount;
             const amountDifference = newAmount - oldAmount; // If new is smaller, diff is negative
+            const orderId = txData.orderId;
 
-            transaction.update(transactionRef, { amount: newAmount });
+            await transaction.update(transactionRef, { amount: newAmount });
 
-            if (txData.orderId) {
-                const orderRef = doc(db, ORDERS_COLLECTION, txData.orderId);
-                transaction.update(orderRef, { remainingAmount: increment(-amountDifference) });
+            if (orderId && amountDifference !== 0) {
+                const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+                await transaction.update(orderRef, { remainingAmount: increment(-amountDifference) });
             }
         });
 
