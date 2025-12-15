@@ -64,7 +64,14 @@ const writeBatch = (d: any) => {
             promises.push(ref.delete());
         },
         commit: async () => {
-            await Promise.all(promises);
+            console.log("Committing batch with", promises.length, "operations");
+            try {
+                const results = await Promise.all(promises);
+                console.log("Batch committed successfully", results);
+            } catch (e) {
+                console.error("Batch commit failed:", e);
+                throw e;
+            }
         },
         set: (ref: any, data: any, options?: any) => {
             promises.push(ref.set(data, options));
@@ -706,13 +713,12 @@ export async function addCustomerShippingCost(orderId: string, costInUSD: number
     }
 }
 
-export async function addCustomerWeightCostLYD(orderId: string, costLYD: number): Promise<boolean> {
-    if (costLYD < 0) return false;
+export async function addCustomerWeightCostLYD(orderId: string, weight: number, companyPricePerKilo: number, customerPricePerKilo: number): Promise<boolean> {
+    if (weight <= 0) return false;
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
 
     try {
-        const batch = writeBatch(db); // Use batch for simplicity as we fixed it, or transaction if concurrency is high. 
-        // Let's use runTransaction for consistency with financial updates.
+        const batch = writeBatch(db);
 
         await runTransaction(db, async (transaction) => {
             const orderDoc = await transaction.get(orderRef);
@@ -723,20 +729,24 @@ export async function addCustomerWeightCostLYD(orderId: string, costLYD: number)
             const orderData = orderDoc.data() as Order;
             const currentSellingPrice = orderData.sellingPriceLYD || 0;
             const currentWeightCost = orderData.customerWeightCost || 0;
+            const currentCompanyWeightCost = orderData.companyWeightCost || 0;
 
-            const newSellingPrice = currentSellingPrice + costLYD;
-            const newWeightCost = currentWeightCost + costLYD;
+            const customerTotalCost = weight * customerPricePerKilo;
+            const companyTotalCost = weight * companyPricePerKilo;
+
+            const newSellingPrice = currentSellingPrice + customerTotalCost;
+            const newCustomerWeightCost = currentWeightCost + customerTotalCost;
+            const newCompanyWeightCost = currentCompanyWeightCost + companyTotalCost;
 
             transaction.update(orderRef, {
                 sellingPriceLYD: newSellingPrice,
-                remainingAmount: increment(costLYD),
-                customerWeightCost: newWeightCost,
+                remainingAmount: increment(customerTotalCost),
+                weightKG: weight,
+                companyPricePerKilo: companyPricePerKilo,
+                customerPricePerKilo: customerPricePerKilo,
+                customerWeightCost: newCustomerWeightCost,
+                companyWeightCost: newCompanyWeightCost,
             });
-
-            // Create a transaction record for this addition (User requested it be added to debts, a transaction record is good for history)
-            // Actually currently we only track 'payment' and 'order'. 
-            // Adding a 'charge' type transaction might be useful but sticking to just updating order is what was requested implicitly.
-            // "add it to user debts" -> handled by remainingAmount update.
         });
 
         // Update stats
@@ -826,11 +836,14 @@ export async function unassignRepresentativeFromOrder(orderId: string): Promise<
 
 export async function deleteOrder(orderId: string): Promise<boolean> {
     try {
+        console.log("Attempting to delete order:", orderId);
         const orderRef = doc(db, ORDERS_COLLECTION, orderId);
         const orderSnap = await getDoc(orderRef);
         if (!orderSnap.exists()) {
+            console.error("Order not found:", orderId);
             throw new Error("Order to delete not found");
         }
+        console.log("Order found, proceeding with delete. User ID:", orderSnap.data().userId);
         const orderData = orderSnap.data() as Order;
         const userId = orderData.userId;
 
@@ -849,6 +862,7 @@ export async function deleteOrder(orderId: string): Promise<boolean> {
 
         batch.delete(orderRef);
         await batch.commit();
+        console.log("Batch commit finished for deleteOrder");
 
         if (userId) {
             await recalculateUserStats(userId);

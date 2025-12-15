@@ -30,23 +30,23 @@ export interface Representative {
   assignedOrders: number;
 }
 
-export type OrderStatus = 
-  | 'pending' 
+export type OrderStatus =
+  | 'pending'
   | 'processed'
   | 'ready'
-  | 'shipped' 
+  | 'shipped'
   | 'arrived_dubai'
   | 'arrived_benghazi'
   | 'arrived_tobruk'
   | 'out_for_delivery'
-  | 'delivered' 
+  | 'delivered'
   | 'cancelled'
   | 'paid';
 
 export interface Order {
   id: string;
   invoiceNumber: string; // The new sequential invoice number per user
-  trackingId: string; 
+  trackingId: string;
   userId: string;
   customerName: string;
   operationDate: string; // ISO String
@@ -61,8 +61,11 @@ export interface Order {
   weightKG?: number;
   pricePerKilo?: number;
   pricePerKiloCurrency?: 'LYD' | 'USD';
-  customerWeightCost?: number; 
+  customerWeightCost?: number;
   customerWeightCostCurrency?: 'LYD' | 'USD';
+  companyWeightCost?: number; // Total cost paid by company
+  companyPricePerKilo?: number; // Cost per kilo for company
+  customerPricePerKilo?: number; // Price per kilo for customer
   addedCostUSD?: number; // New field for additional costs in USD
   addedCostNotes?: string; // Notes for the added cost
   store?: string;
@@ -92,30 +95,30 @@ export interface Transaction {
 }
 
 export interface SubOrder {
-    subOrderId: string;
-    trackingId?: string;
-    username: string;
-    password?: string;
-    customerName: string;
-    customerPhone: string;
-    customerAddress: string;
-    purchasePriceUSD: number;
-    sellingPriceLYD: number;
-    downPaymentLYD: number;
-    paymentMethod: string;
-    shipmentStatus: OrderStatus;
-    selectedStore: string;
-    manualStoreName: string;
-    productLinks: string;
-    operationDate?: string; // ISO String
-    deliveryDate?: string; // ISO String
-    itemDescription: string;
-    weightKG: number;
-    pricePerKiloUSD: number;
-    remainingAmount: number;
-    representativeId?: string | null;
-    representativeName?: string | null;
-    invoiceName?: string; // For providing context in rep dashboard
+  subOrderId: string;
+  trackingId?: string;
+  username: string;
+  password?: string;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  purchasePriceUSD: number;
+  sellingPriceLYD: number;
+  downPaymentLYD: number;
+  paymentMethod: string;
+  shipmentStatus: OrderStatus;
+  selectedStore: string;
+  manualStoreName: string;
+  productLinks: string;
+  operationDate?: string; // ISO String
+  deliveryDate?: string; // ISO String
+  itemDescription: string;
+  weightKG: number;
+  pricePerKiloUSD: number;
+  remainingAmount: number;
+  representativeId?: string | null;
+  representativeName?: string | null;
+  invoiceName?: string; // For providing context in rep dashboard
 }
 
 export interface TempOrder {
@@ -159,9 +162,9 @@ export interface Notification {
 }
 
 export interface AppSettings {
-    exchangeRate: number;
-    pricePerKiloLYD: number;
-    pricePerKiloUSD: number;
+  exchangeRate: number;
+  pricePerKiloLYD: number;
+  pricePerKiloUSD: number;
 }
 
 export interface Expense {
@@ -174,30 +177,30 @@ export interface Expense {
 export type DepositStatus = 'pending' | 'collected' | 'cancelled';
 
 export interface Deposit {
-    id: string;
-    receiptNumber: string;
-    customerName: string;
-    customerPhone: string;
-    amount: number;
-    date: string; // ISO String
-    description: string;
-    status: DepositStatus;
-    representativeId: string | null;
-    representativeName: string | null;
-    collectedBy: 'admin' | 'representative';
-    collectedDate: string | null;
+  id: string;
+  receiptNumber: string;
+  customerName: string;
+  customerPhone: string;
+  amount: number;
+  date: string; // ISO String
+  description: string;
+  status: DepositStatus;
+  representativeId: string | null;
+  representativeName: string | null;
+  collectedBy: 'admin' | 'representative';
+  collectedDate: string | null;
 }
 
 export type ExternalDebtStatus = 'pending' | 'paid' | 'payment';
 
 export interface ExternalDebt {
-    id: string;
-    creditorId: string;
-    creditorName: string;
-    amount: number;
-    date: string; // ISO String
-    status: ExternalDebtStatus;
-    notes: string;
+  id: string;
+  creditorId: string;
+  creditorName: string;
+  amount: number;
+  date: string; // ISO String
+  status: ExternalDebtStatus;
+  notes: string;
 }
 
 export interface Creditor {
@@ -211,16 +214,16 @@ export interface Creditor {
 
 
 export interface ManualShippingLabel {
-    id: string;
-    invoiceNumber: string;
-    operationDate: string; // ISO String
-    customerName: string;
-    customerAddress: string;
-    customerPhone: string;
-    itemDescription: string;
-    trackingId: string;
-    sellingPriceLYD: number;
-    remainingAmount: number;
+  id: string;
+  invoiceNumber: string;
+  operationDate: string; // ISO String
+  customerName: string;
+  customerAddress: string;
+  customerPhone: string;
+  itemDescription: string;
+  trackingId: string;
+  sellingPriceLYD: number;
+  remainingAmount: number;
 }
 
 export interface InstantSale {

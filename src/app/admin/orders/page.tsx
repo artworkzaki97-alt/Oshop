@@ -101,7 +101,9 @@ const AdminOrdersPage = () => {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNotes, setPaymentNotes] = useState('');
-  const [weightCost, setWeightCost] = useState(0);
+  const [weightKg, setWeightKg] = useState(0);
+  const [companyKiloPrice, setCompanyKiloPrice] = useState(0); // Company cost per kilo
+  const [customerKiloPrice, setCustomerKiloPrice] = useState(0); // Customer price per kilo
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState("");
@@ -172,7 +174,8 @@ const AdminOrdersPage = () => {
     const profit = activeOrders.reduce((sum, order) => {
       const purchaseCostLYD = (order.purchasePriceUSD || 0) * (order.exchangeRate || settings?.exchangeRate || 1);
       const shippingCostLYD = order.shippingCostLYD || 0;
-      const netProfit = order.sellingPriceLYD - purchaseCostLYD - shippingCostLYD;
+      const weightCostLYD = order.companyWeightCost || 0;
+      const netProfit = order.sellingPriceLYD - purchaseCostLYD - shippingCostLYD - weightCostLYD;
       return sum + netProfit;
     }, 0);
 
@@ -209,7 +212,9 @@ const AdminOrdersPage = () => {
 
   const openWeightDialog = (order: Order) => {
     setCurrentOrder(order);
-    setWeightCost(0);
+    setWeightKg(0);
+    setCompanyKiloPrice(0);
+    setCustomerKiloPrice(0);
     setIsWeightDialogOpen(true);
   };
 
@@ -249,9 +254,13 @@ const AdminOrdersPage = () => {
 
   const handleDeleteOrder = async () => {
     if (currentOrder) {
-      await deleteOrder(currentOrder.id);
-      setOrders(prevOrders => prevOrders.filter(o => o.id !== currentOrder.id));
-      toast({ title: "تم حذف الطلب" });
+      const success = await deleteOrder(currentOrder.id);
+      if (success) {
+        setOrders(prevOrders => prevOrders.filter(o => o.id !== currentOrder.id));
+        toast({ title: "تم حذف الطلب" });
+      } else {
+        toast({ title: "خطأ", description: "فشل حذف الطلب. يرجى مراجعة السجلات.", variant: "destructive" });
+      }
     }
     setIsDeleteConfirmOpen(false);
     setCurrentOrder(null);
@@ -280,22 +289,30 @@ const AdminOrdersPage = () => {
   };
 
   const handleAddWeightCost = async () => {
-    if (!currentOrder || weightCost <= 0) return;
+    if (!currentOrder || weightKg <= 0) return;
 
     try {
-      await addCustomerWeightCostLYD(currentOrder.id, weightCost);
+      await addCustomerWeightCostLYD(currentOrder.id, weightKg, companyKiloPrice, customerKiloPrice);
+
+      const customerTotal = weightKg * customerKiloPrice;
+      const companyTotal = weightKg * companyKiloPrice;
+
       setOrders(prev => prev.map(o => {
         if (o.id === currentOrder.id) {
           return {
             ...o,
-            sellingPriceLYD: o.sellingPriceLYD + weightCost,
-            remainingAmount: o.remainingAmount + weightCost,
-            customerWeightCost: (o.customerWeightCost || 0) + weightCost
+            sellingPriceLYD: o.sellingPriceLYD + customerTotal,
+            remainingAmount: o.remainingAmount + customerTotal,
+            customerWeightCost: (o.customerWeightCost || 0) + customerTotal,
+            companyWeightCost: (o.companyWeightCost || 0) + companyTotal,
+            weightKG: weightKg,
+            companyPricePerKilo: companyKiloPrice,
+            customerPricePerKilo: customerKiloPrice
           };
         }
         return o;
       }));
-      toast({ title: "تم إضافة قيمة الوزن بنجاح" });
+      toast({ title: "تم إضافة تفاصيل الوزن بنجاح" });
       setIsWeightDialogOpen(false);
       setCurrentOrder(null);
     } catch (error) {
@@ -706,25 +723,59 @@ const AdminOrdersPage = () => {
       <Dialog open={isWeightDialogOpen} onOpenChange={setIsWeightDialogOpen}>
         <DialogContent dir='rtl'>
           <DialogHeader>
-            <DialogTitle>إضافة قيمة وزن الزبون - {currentOrder?.invoiceNumber}</DialogTitle>
+            <DialogTitle>إضافة تفاصيل الوزن - {currentOrder?.invoiceNumber}</DialogTitle>
             <DialogDescription>
-              أدخل القيمة المالية للوزن (د.ل) لإضافتها على الفاتورة والمديونية.
+              أدخل الوزن وتكلفة الكيلو (على الشركة) وسعر بيع الكيلو (للزبون).
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="weight-cost">قيمة الوزن (د.ل)</Label>
+              <Label htmlFor="weight-kg">الوزن (كجم)</Label>
               <Input
-                id="weight-cost"
+                id="weight-kg"
                 type="number"
-                value={weightCost}
-                onChange={(e) => setWeightCost(parseFloat(e.target.value) || 0)}
+                value={weightKg}
+                onChange={(e) => setWeightKg(parseFloat(e.target.value) || 0)}
                 dir="ltr"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-price">تكلفة الكيلو على الشركة (د.ل)</Label>
+              <Input
+                id="company-price"
+                type="number"
+                value={companyKiloPrice}
+                onChange={(e) => setCompanyKiloPrice(parseFloat(e.target.value) || 0)}
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="customer-price">سعر بيع الكيلو للزبون (د.ل)</Label>
+              <Input
+                id="customer-price"
+                type="number"
+                value={customerKiloPrice}
+                onChange={(e) => setCustomerKiloPrice(parseFloat(e.target.value) || 0)}
+                dir="ltr"
+              />
+            </div>
+            <div className="bg-muted p-3 rounded-md text-sm space-y-1">
+              <div className="flex justify-between">
+                <span>إجمالي التكلفة (شركة):</span>
+                <span className="font-bold">{(weightKg * companyKiloPrice).toFixed(2)} د.ل</span>
+              </div>
+              <div className="flex justify-between">
+                <span>إجمالي البيع (زبون):</span>
+                <span className="font-bold text-green-600">{(weightKg * customerKiloPrice).toFixed(2)} د.ل</span>
+              </div>
+              <div className="flex justify-between pt-1 border-t">
+                <span>الربح من الوزن:</span>
+                <span className="font-bold text-primary">{((weightKg * customerKiloPrice) - (weightKg * companyKiloPrice)).toFixed(2)} د.ل</span>
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleAddWeightCost}>إضافة</Button>
+            <Button onClick={handleAddWeightCost}>حفظ وإضافة</Button>
             <Button variant="outline" onClick={() => setIsWeightDialogOpen(false)}>إلغاء</Button>
           </DialogFooter>
         </DialogContent>
