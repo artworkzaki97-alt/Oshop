@@ -12,6 +12,11 @@
     "typecheck": "tsc --noEmit",
     "deploy": "npm run build && firebase deploy --only hosting"
   },
+  "overrides": {
+    "@genkit-ai/next": {
+      "next": "$next"
+    }
+  },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",
     "@genkit-ai/next": "^1.14.1",
