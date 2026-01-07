@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MoreHorizontal, PlusCircle, Trash2, Loader2, HandCoins, CheckCircle, Clock, XCircle, Search, Calendar as CalendarIcon, Edit, Filter, X, Printer } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Loader2, HandCoins, CheckCircle, Clock, XCircle, Search, Calendar as CalendarIcon, Edit, Filter, X, Printer, Check, ChevronsUpDown } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -32,8 +32,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from '@/components/ui/badge';
-import { Deposit, DepositStatus, Representative } from '@/lib/types';
-import { getDeposits, addDeposit, deleteDeposit, getRepresentatives, updateDeposit } from '@/lib/actions';
+import { Deposit, DepositStatus, Representative, User } from '@/lib/types';
+import { getDeposits, addDeposit, deleteDeposit, getRepresentatives, updateDeposit, getUsers } from '@/lib/actions';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { ar } from 'date-fns/locale';
 import { DateRange } from "react-day-picker";
@@ -43,7 +43,14 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRouter } from 'next/navigation';
-
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
 
 const statusConfig: { [key in DepositStatus]: { text: string; icon: React.ReactNode; className: string } } = {
     pending: { text: 'قيد الانتظار', icon: <Clock className="w-4 h-4" />, className: 'bg-yellow-100 text-yellow-700' },
@@ -57,6 +64,7 @@ const AdminDepositsPage = () => {
     const router = useRouter();
     const [allDeposits, setAllDeposits] = useState<Deposit[]>([]);
     const [representatives, setRepresentatives] = useState<Representative[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -65,21 +73,31 @@ const AdminDepositsPage = () => {
     const [filterType, setFilterType] = useState<string>('all');
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
+    // Combobox state
+    const [openCombobox, setOpenCombobox] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [customerName, setCustomerName] = useState('');
+    const [customerPhone, setCustomerPhone] = useState('');
+
+
     const fetchInitialData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [fetchedDeposits, fetchedReps] = await Promise.all([
+            const [fetchedDeposits, fetchedReps, fetchedUsers] = await Promise.all([
                 getDeposits(),
-                getRepresentatives()
+                getRepresentatives(),
+                getUsers()
             ]);
             setAllDeposits(fetchedDeposits);
             setRepresentatives(fetchedReps);
+            setUsers(fetchedUsers);
         } catch (error) {
             toast({ title: "خطأ", description: "فشل تحميل البيانات.", variant: "destructive" });
         } finally {
             setIsLoading(false);
         }
     }, [toast]);
+
 
     useEffect(() => {
         fetchInitialData();
@@ -133,6 +151,17 @@ const AdminDepositsPage = () => {
 
     const openDialog = (deposit: Deposit | null = null) => {
         setCurrentDeposit(deposit);
+        if (deposit) {
+            setCustomerName(deposit.customerName);
+            setCustomerPhone(deposit.customerPhone);
+            // Try to find matching user? Maybe too complex to auto-match back to user ID since we don't store user ID in deposit.
+            // Just set text fields.
+            setSelectedUser(null);
+        } else {
+            setCustomerName('');
+            setCustomerPhone('');
+            setSelectedUser(null);
+        }
         setIsDialogOpen(true);
     };
 
@@ -399,13 +428,73 @@ const AdminDepositsPage = () => {
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4 text-right">
+                            {/* User Search Combobox */}
+                            <div className="space-y-2">
+                                <Label>بحث عن عميل (اختياري)</Label>
+                                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openCombobox}
+                                            className="w-full justify-between"
+                                        >
+                                            {selectedUser ? selectedUser.name : "اختر عميلاً..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-full p-0">
+                                        <Command>
+                                            <CommandInput placeholder="بحث عن عميل..." />
+                                            <CommandList>
+                                                <CommandEmpty>لم يتم العثور على عميل.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {users.map((user) => (
+                                                        <CommandItem
+                                                            key={user.id}
+                                                            value={`${user.name} ${user.phone}`}
+                                                            onSelect={() => {
+                                                                setSelectedUser(user);
+                                                                setCustomerName(user.name);
+                                                                setCustomerPhone(user.phone);
+                                                                setOpenCombobox(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    selectedUser?.id === user.id ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {user.name} ({user.phone})
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+
                             <div className="space-y-2">
                                 <Label htmlFor="customerName">اسم العميل</Label>
-                                <Input id="customerName" name="customerName" defaultValue={currentDeposit?.customerName} required />
+                                <Input
+                                    id="customerName"
+                                    name="customerName"
+                                    value={customerName}
+                                    onChange={(e) => setCustomerName(e.target.value)}
+                                    required
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="customerPhone">رقم هاتف العميل</Label>
-                                <Input id="customerPhone" name="customerPhone" defaultValue={currentDeposit?.customerPhone} required />
+                                <Input
+                                    id="customerPhone"
+                                    name="customerPhone"
+                                    value={customerPhone}
+                                    onChange={(e) => setCustomerPhone(e.target.value)}
+                                    required
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="amount">المبلغ (د.ل)</Label>
