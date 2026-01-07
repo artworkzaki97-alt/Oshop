@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DollarSign, CreditCard, MoreHorizontal, Edit, Trash2, TrendingUp, RefreshCcw, TrendingDown, Calendar as CalendarIcon, Loader2, Search, ArrowUpDown } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
-import { Transaction, Order, AppSettings, Expense, OrderStatus } from '@/lib/types';
-import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses } from '@/lib/actions';
+import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses, getCreditors } from '@/lib/actions';
+import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
     DropdownMenu,
@@ -43,7 +43,6 @@ import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-
 const statusConfig: Record<string, { text: string; className: string }> = {
     pending: { text: 'قيد التجهيز', className: 'bg-yellow-100 text-yellow-700' },
     processed: { text: 'تم التنفيذ', className: 'bg-cyan-100 text-cyan-700' },
@@ -69,13 +68,13 @@ type ChartDataPoint = {
     profit: number;
 };
 
-
 const FinancialReportsPage = () => {
     const router = useRouter();
     const { toast } = useToast();
     const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
     const [allOrders, setAllOrders] = useState<Order[]>([]);
     const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+    const [allCreditors, setAllCreditors] = useState<Creditor[]>([]);
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -87,19 +86,20 @@ const FinancialReportsPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>(null);
 
-
     const fetchData = async () => {
         setIsLoading(true);
-        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses] = await Promise.all([
+        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses, fetchedCreditors] = await Promise.all([
             getTransactions(),
             getOrders(),
             getAppSettings(),
             getExpenses(),
+            getCreditors(),
         ]);
         setAllTransactions(fetchedTransactions);
         setAllOrders(fetchedOrders);
         setSettings(fetchedSettings);
         setAllExpenses(fetchedExpenses);
+        setAllCreditors(fetchedCreditors);
         setIsLoading(false);
     }
 
@@ -287,8 +287,7 @@ const FinancialReportsPage = () => {
         }
         setIsResetDialogOpen(false);
     }
-
-    const { totalRevenue, totalDebt, totalExpenses, netProfit, totalUSDCost } = useMemo(() => {
+    const { totalRevenue, totalDebt, totalExpenses, netProfit, totalUSDCost, totalCreditorDebtLYD, totalCreditorDebtUSD } = useMemo(() => {
         const revenue = chartData.reduce((sum, item) => sum + item.revenue, 0);
         const expenses = chartData.reduce((sum, item) => sum + item.expenses, 0);
         const profit = chartData.reduce((sum, item) => sum + item.profit, 0);
@@ -303,20 +302,29 @@ const FinancialReportsPage = () => {
             .filter(o => o.status !== 'cancelled')
             .reduce((sum, order) => sum + order.remainingAmount, 0);
 
+        // Calculate Creditor Balances (Note: These are global balances, not necessarily filtered by date effectively unless we tracked history)
+        // For now, we show current snapshot balance.
+        const credDebtLYD = allCreditors.filter(c => c.currency === 'LYD').reduce((sum, c) => sum + c.totalDebt, 0);
+        const credDebtUSD = allCreditors.filter(c => c.currency === 'USD').reduce((sum, c) => sum + c.totalDebt, 0);
+
         return {
             totalRevenue: revenue,
             totalDebt: debt,
             totalExpenses: expenses,
             netProfit: profit - expenses,
-            totalUSDCost: usdCost
+            totalUSDCost: usdCost,
+            totalCreditorDebtLYD: credDebtLYD,
+            totalCreditorDebtUSD: credDebtUSD
         };
-    }, [chartData, dateFilteredOrders]);
+    }, [chartData, dateFilteredOrders, allCreditors]);
 
 
     const summaryCards = [
         { title: 'الخزينة (دينار)', value: `${(totalRevenue - totalExpenses).toFixed(2)} د.ل`, icon: <DollarSign className="w-6 h-6" />, color: (totalRevenue - totalExpenses) >= 0 ? 'text-green-600' : 'text-destructive', description: "السيولة النقدية (إيرادات - مصروفات)" },
         { title: 'التكلفة (دولار)', value: `${totalUSDCost.toFixed(2)} $`, icon: <DollarSign className="w-6 h-6" />, color: 'text-blue-600', description: "إجمالي تكلفة الشحن بالدولار" },
-        { title: 'إجمالي الديون', value: `${totalDebt.toFixed(2)} د.ل`, icon: <CreditCard className="w-6 h-6" />, color: 'text-destructive', description: "الديون المتبقية عند العملاء" },
+        { title: 'ديون العملاء', value: `${totalDebt.toFixed(2)} د.ل`, icon: <CreditCard className="w-6 h-6" />, color: 'text-destructive', description: "الديون المتبقية عند العملاء" },
+        { title: 'ديون خارجية (LYD)', value: `${totalCreditorDebtLYD.toFixed(2)} د.ل`, icon: <TrendingDown className="w-6 h-6" />, color: totalCreditorDebtLYD > 0 ? 'text-destructive' : 'text-green-600', description: "إجمالي الذمم بالدينار" },
+        { title: 'ديون خارجية (USD)', value: `${totalCreditorDebtUSD.toFixed(2)} $`, icon: <TrendingDown className="w-6 h-6" />, color: totalCreditorDebtUSD > 0 ? 'text-destructive' : 'text-green-600', description: "إجمالي الذمم بالدولار" },
         { title: 'صافي الربح', value: `${netProfit.toFixed(2)} د.ل`, icon: <TrendingUp className="w-6 h-6" />, color: netProfit >= 0 ? 'text-primary' : 'text-destructive', description: "الأرباح المحققة" },
     ];
 
