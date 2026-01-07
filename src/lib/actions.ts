@@ -244,7 +244,7 @@ export async function updateAppSettings(data: Partial<AppSettings>): Promise<boo
 
 // --- Manager Actions ---
 export async function ensureDefaultAdminExists() {
-    const defaultUsername = 'admin@tamweelsys.app';
+    const defaultUsername = 'admin@Oshop.app';
     const docRef = doc(db, MANAGERS_COLLECTION, defaultUsername); // Use email as ID for simplicity
     const docSnap = await getDoc(docRef);
 
@@ -255,7 +255,7 @@ export async function ensureDefaultAdminExists() {
             username: defaultUsername,
             password: '0920064400',
             phone: '0920064400',
-            permissions: ['users', 'employees', 'representatives', 'orders', 'shipping_label', 'temporary_users', 'financial_reports', 'instant_sales', 'deposits', 'expenses', 'creditors', 'support', 'notifications', 'exchange_rate', 'data_export']
+            permissions: ['dashboard', 'users', 'employees', 'representatives', 'orders', 'inventory', 'shipping_label', 'temporary_users', 'financial_reports', 'instant_sales', 'deposits', 'expenses', 'creditors', 'support', 'notifications', 'exchange_rate', 'data_export']
         };
         try {
             await setDoc(docRef, defaultAdmin);
