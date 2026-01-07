@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,7 +13,7 @@
     --popover: 240 10% 100%;
     --popover-foreground: 224 71.4% 4.1%;
 
-    --primary: 201 75% 47%;
+    --primary: 32.8 93.1% 54.1%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 10% 96.1%;
@@ -31,7 +30,7 @@
 
     --border: 240 10% 90%;
     --input: 240 10% 92%;
-    --ring: 201 75% 47%;
+    --ring: 32.8 93.1% 54.1%;
 
     --radius: 0.8rem;
   }
@@ -43,7 +42,7 @@
     --card-foreground: 210 40% 98%;
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 201 85% 55%;
+    --primary: 33 93% 54%;
     --primary-foreground: 222 47% 11%;
     --secondary: 217 33% 25%;
     --secondary-foreground: 210 40% 98%;
@@ -55,7 +54,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217 33% 20%;
     --input: 217 33% 18%;
-    --ring: 201 85% 55%;
+    --ring: 33 93% 54%;
   }
 }
 
@@ -63,8 +62,10 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
   }
 }
 
@@ -74,10 +75,11 @@
     visibility: hidden;
   }
 
-  .printable-content, .printable-content * {
+  .printable-content,
+  .printable-content * {
     visibility: visible;
   }
-  
+
   .printable-content {
     position: absolute;
     left: 0;
@@ -101,13 +103,16 @@
   table {
     page-break-inside: auto;
   }
+
   tr {
     page-break-inside: avoid;
     page-break-after: auto;
   }
+
   thead {
     display: table-header-group;
   }
+
   tfoot {
     display: table-footer-group;
   }
@@ -121,7 +126,10 @@
 }
 
 @media print {
-  .shipping-label-page, .deposit-receipt-page, .statement-page {
+
+  .shipping-label-page,
+  .deposit-receipt-page,
+  .statement-page {
     width: 210mm;
     min-height: 148mm;
     height: 100%;
@@ -132,4 +140,3 @@
     border: none !important;
   }
 }
-

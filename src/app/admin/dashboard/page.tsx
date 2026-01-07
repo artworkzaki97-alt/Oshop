@@ -34,8 +34,8 @@ const allDashboardItems = [
         description: "عرض وتحديث حالات الطلبات الجديدة.",
         icon: ShoppingCart,
         href: "/admin/orders",
-        color: "text-blue-400",
-        gradient: "from-blue-500/20 to-cyan-500/20"
+        color: "text-orange-400",
+        gradient: "from-orange-500/20 to-yellow-500/20"
     },
     {
         title: "إدارة المستخدمين",
@@ -244,7 +244,7 @@ const AdminDashboardPage = () => {
                             variants={itemVariant}
                             className="text-4xl font-black tracking-tight text-foreground mb-2"
                         >
-                            مرحباً، <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-purple-400">{manager.name}</span> 👋
+                            مرحباً، <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-400">{manager.name}</span> 👋
                         </motion.h1>
                     ) : (
                         <div className="flex items-center gap-2">
@@ -258,7 +258,7 @@ const AdminDashboardPage = () => {
 
                 <motion.div variants={itemVariant}>
                     <Link href="/admin/orders/add">
-                        <Button className="h-12 px-6 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-primary/80 hover:to-blue-600/80 shadow-lg shadow-primary/25 text-lg font-bold">
+                        <Button className="h-12 px-6 rounded-xl bg-gradient-to-r from-primary to-orange-600 hover:from-primary/80 hover:to-orange-600/80 shadow-lg shadow-primary/25 text-lg font-bold">
                             <Zap className="mr-2 h-5 w-5 fill-white" />
                             طلب جديد
                         </Button>
@@ -351,7 +351,7 @@ const AdminDashboardPage = () => {
                                     <div className="w-full md:w-1/2 h-[300px]">
                                         <PremiumDonutChart
                                             data={[
-                                                { name: "صافي الأرباح", value: dailyData.netProfit > 0 ? dailyData.netProfit : 0, color: "#38bdf8" }, // Sky Blue
+                                                { name: "صافي الأرباح", value: dailyData.netProfit > 0 ? dailyData.netProfit : 0, color: "#f7941d" }, // Primary Orange
                                                 { name: "المصاريف", value: dailyData.expenses, color: "#ef4444" }, // Red
                                                 { name: "تكلفة المبيعات", value: dailyData.revenue - dailyData.netProfit - dailyData.expenses, color: "#a855f7" } // Purple (approx purchase cost)
                                             ].filter(d => d.value > 0)}
@@ -361,11 +361,11 @@ const AdminDashboardPage = () => {
                                     </div>
                                     <div className="flex flex-col gap-4 w-full md:w-auto p-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-4 h-4 rounded-full bg-[#38bdf8] shadow-[0_0_10px_#38bdf8]" />
+                                            <div className="w-4 h-4 rounded-full bg-[#f7941d] shadow-[0_0_10px_#f7941d]" />
                                             <div>
                                                 <div>
                                                     <p className="text-muted-foreground text-sm">صافي الأرباح</p>
-                                                    <p className="text-xl font-bold text-foreground bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-blue-500">
+                                                    <p className="text-xl font-bold text-foreground bg-clip-text text-transparent bg-gradient-to-r from-primary to-orange-500">
                                                         {(dailyData.netProfit > 0 ? dailyData.netProfit : 0).toLocaleString()} <span className="text-xs">د.ل</span>
                                                     </p>
                                                 </div>
@@ -404,7 +404,7 @@ const AdminDashboardPage = () => {
                 {/* Recent Orders / Side Panel */}
                 <motion.div variants={itemVariant} className="space-y-6">
                     <GlassCard className="relative overflow-hidden min-h-[300px]">
-                        <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-primary to-purple-600" />
+                        <div className="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-primary to-orange-600" />
                         <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                             <ShoppingCart className="w-5 h-5 text-primary" />
                             أحدث الطلبات
@@ -415,7 +415,7 @@ const AdminDashboardPage = () => {
                                     <Link key={order.id} href={`/admin/orders/${order.id}`}>
                                         <div className="flex justify-between items-center p-3 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-black/5 dark:hover:border-white/5 group">
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-2 h-2 rounded-full ${order.status === 'delivered' ? 'bg-green-500' : order.status === 'pending' ? 'bg-yellow-500' : 'bg-blue-500'} shadow-[0_0_8px_currentColor]`} />
+                                                <div className={`w-2 h-2 rounded-full ${order.status === 'delivered' ? 'bg-green-500' : order.status === 'pending' ? 'bg-yellow-500' : 'bg-orange-500'} shadow-[0_0_8px_currentColor]`} />
                                                 <div>
                                                     <p className="text-sm text-foreground font-bold group-hover:text-primary transition-colors">#{order.invoiceNumber}</p>
                                                     <p className="text-xs text-muted-foreground">{new Date(order.operationDate).toLocaleDateString('ar-EG')}</p>
@@ -425,7 +425,7 @@ const AdminDashboardPage = () => {
                                                 <p className="text-sm font-bold text-foreground">{order.sellingPriceLYD.toLocaleString()} <span className="text-[10px] font-normal text-muted-foreground">د.ل</span></p>
                                                 <span className={`text-[10px] px-2 py-0.5 rounded-full ${order.status === 'delivered' ? 'bg-green-500/10 text-green-400' :
                                                     order.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' :
-                                                        'bg-blue-500/10 text-blue-400'
+                                                        'bg-primary/10 text-primary'
                                                     }`}>
                                                     {order.status === 'delivered' ? 'تم التوصيل' : order.status === 'pending' ? 'قيد الانتظار' : order.status}
                                                 </span>
@@ -447,7 +447,7 @@ const AdminDashboardPage = () => {
                     <Link href="/admin/temporary-users/add">
                         <GlassCard className="group cursor-pointer hover:border-primary/50 transition-colors">
                             <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg text-white group-hover:scale-110 transition-transform">
+                                <div className="p-3 rounded-full bg-gradient-to-br from-orange-500 to-yellow-600 shadow-lg text-white group-hover:scale-110 transition-transform">
                                     <Users2 className="w-6 h-6" />
                                 </div>
                                 <div>

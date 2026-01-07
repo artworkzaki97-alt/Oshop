@@ -126,7 +126,7 @@ const SplashScreen = () => {
         initial="hidden"
         animate="visible"
       >
-        <motion.div variants={itemVariants}>
+        <motion.div variants={itemVariants} suppressHydrationWarning={true}>
           <Image
             src={logo}
             alt="Logo"
@@ -148,7 +148,7 @@ const SplashScreen = () => {
       </motion.div>
 
       <footer className="absolute bottom-4 text-xs text-muted-foreground z-10">
-        جميع الحقوق محفوظة لشركة تمويل
+        جميع الحقوق محفوظة لشركة Oshop
       </footer>
     </div>
   );

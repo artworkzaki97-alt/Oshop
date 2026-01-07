@@ -22,6 +22,8 @@ import {
     Wallet
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
+import logo from '@/app/assets/logo.png';
 
 interface UserProfileClientProps {
     user: User;
@@ -92,11 +94,15 @@ export const UserProfileClient = ({
 
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
                         <div className="flex items-center gap-6">
-                            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-purple-600 p-1 shadow-xl shadow-primary/20">
-                                <div className="w-full h-full rounded-full bg-black/5 dark:bg-black/40 backdrop-blur-sm flex items-center justify-center border-2 border-white/20">
-                                    <span className="text-4xl font-bold text-white">
-                                        {user.name.charAt(0).toUpperCase()}
-                                    </span>
+                            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-orange-600 p-1 shadow-xl shadow-primary/20 flex items-center justify-center bg-white dark:bg-zinc-900">
+                                <div className="relative w-full h-full rounded-full overflow-hidden bg-white dark:bg-black/20 p-2">
+                                    <Image
+                                        src={logo}
+                                        alt="User Logo"
+                                        layout="fill"
+                                        objectFit="contain"
+                                        className="p-2"
+                                    />
                                 </div>
                             </div>
 
@@ -132,7 +138,7 @@ export const UserProfileClient = ({
                                 </Button>
                             </Link>
                             <Link href={`/admin/orders/add?userId=${user.id}&name=${user.name}&phone=${user.phone}&address=${user.address}`}>
-                                <Button className="gap-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 shadow-lg shadow-primary/25">
+                                <Button className="gap-2 bg-gradient-to-r from-primary to-orange-600 hover:from-primary/90 hover:to-orange-600/90 shadow-lg shadow-primary/25">
                                     <ShoppingCart className="w-4 h-4" />
                                     طلب جديد
                                 </Button>
@@ -145,13 +151,13 @@ export const UserProfileClient = ({
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <motion.div variants={itemVariant}>
-                    <GlassCard variant="neon" className="border-l-4 border-l-blue-500">
+                    <GlassCard variant="neon" className="border-l-4 border-l-primary">
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="text-muted-foreground font-medium mb-1">إجمالي الطلبات</p>
                                 <h3 className="text-3xl font-black text-foreground">{totalOrdersValue.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">د.ل</span></h3>
                             </div>
-                            <div className="p-3 bg-blue-500/10 rounded-xl text-blue-500">
+                            <div className="p-3 bg-primary/10 rounded-xl text-primary">
                                 <Wallet className="w-6 h-6" />
                             </div>
                         </div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cairo } from 'next/font/google';
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { cn } from "@/lib/utils";
 
 // Polyfill localStorage for SSR if needed
 if (typeof window === 'undefined') {
@@ -30,14 +31,14 @@ if (typeof window === 'undefined') {
 
 
 const cairo = Cairo({
-  subsets: ['arabic'],
+  subsets: ['arabic', 'latin'],
   display: 'swap',
   variable: '--font-cairo',
 });
 
 export const metadata: Metadata = {
-  title: "تمويل",
-  description: "منظومة تمويل لإدارة الشحنات والعملاء",
+  title: "Oshop",
+  description: "منظومة Oshop لإدارة الشحنات والعملاء",
 };
 
 export default function RootLayout({
@@ -51,7 +52,7 @@ export default function RootLayout({
       <head>
         {/* Next.js will automatically handle the favicon if it's placed in the app directory. */}
       </head>
-      <body>
+      <body className={cn("min-h-screen bg-background font-sans antialiased")}>
         {children}
         <Toaster />
       </body>
