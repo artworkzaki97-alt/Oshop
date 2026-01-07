@@ -1,30 +1,96 @@
--- Create Users table
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 1. Managers Table
+CREATE TABLE IF NOT EXISTS managers_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT,
-  username TEXT,
+  username TEXT UNIQUE,
   password TEXT,
   phone TEXT,
+  permissions TEXT[] -- Array of permission strings
+);
+
+-- 2. Users Table
+CREATE TABLE IF NOT EXISTS users_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT,
+  username TEXT UNIQUE,
+  password TEXT,
+  phone TEXT UNIQUE,
   address TEXT,
   "orderCount" INTEGER DEFAULT 0,
   debt FLOAT DEFAULT 0,
   "orderCounter" INTEGER DEFAULT 0
 );
 
--- Add missing columns to users if they exist
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='address') THEN
-        ALTER TABLE users ADD COLUMN address TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='orderCounter') THEN
-        ALTER TABLE users ADD COLUMN "orderCounter" INTEGER DEFAULT 0;
-    END IF;
-END $$;
+-- 3. Global Sites Table (New Phase 6)
+CREATE TABLE IF NOT EXISTS global_sites_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT,
+  url TEXT,
+  logo TEXT
+);
 
--- Create Orders table
-CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY,
+-- 4. Shein Cards Table (New Phase 7)
+CREATE TABLE IF NOT EXISTS shein_cards_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code TEXT UNIQUE,
+  value FLOAT,
+  currency TEXT DEFAULT 'USD',
+  status TEXT CHECK (status IN ('available', 'used', 'expired')),
+  "purchaseDate" TEXT, -- ISO String
+  "expiryDate" TEXT,
+  "usedAt" TEXT,
+  "usedForOrderId" TEXT,
+  notes TEXT
+);
+
+-- 5. Products/Inventory Table (Inventory Phase)
+CREATE TABLE IF NOT EXISTS products_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT,
+  sku TEXT,
+  quantity INTEGER DEFAULT 0,
+  "minStockLevel" INTEGER DEFAULT 0,
+  "costPriceUSD" FLOAT DEFAULT 0,
+  "sellingPriceLYD" FLOAT DEFAULT 0,
+  "sellingPriceUSD" FLOAT,
+  description TEXT,
+  category TEXT,
+  "createdAt" TEXT,
+  "updatedAt" TEXT
+);
+
+-- 6. Expenses Table
+CREATE TABLE IF NOT EXISTS expenses_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  description TEXT,
+  amount FLOAT DEFAULT 0,
+  date TEXT,
+  "managerId" TEXT
+);
+
+-- 7. Deposits/Arboon Table
+CREATE TABLE IF NOT EXISTS deposits_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "receiptNumber" TEXT,
+  "customerName" TEXT,
+  "customerPhone" TEXT,
+  "userId" TEXT,
+  amount FLOAT DEFAULT 0,
+  date TEXT,
+  description TEXT,
+  status TEXT,
+  "representativeId" TEXT,
+  "representativeName" TEXT,
+  "collectedBy" TEXT,
+  "collectedDate" TEXT
+);
+
+-- 8. Orders Table
+CREATE TABLE IF NOT EXISTS orders_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
   "invoiceNumber" TEXT,
   "trackingId" TEXT,
   "userId" TEXT,
@@ -38,10 +104,14 @@ CREATE TABLE IF NOT EXISTS orders (
   "purchasePriceUSD" FLOAT DEFAULT 0,
   "downPaymentLYD" FLOAT DEFAULT 0,
   "weightKG" FLOAT DEFAULT 0,
+  
+  -- Financial Snapshot
   "shippingCostUSD" FLOAT DEFAULT 0,
   "shippingPriceUSD" FLOAT DEFAULT 0,
   "localShippingPrice" FLOAT DEFAULT 0,
   "totalAmountLYD" FLOAT DEFAULT 0,
+  
+  -- Unit Prices
   "pricePerKilo" FLOAT DEFAULT 0,
   "pricePerKiloCurrency" TEXT,
   "customerWeightCost" FLOAT DEFAULT 0,
@@ -51,8 +121,12 @@ CREATE TABLE IF NOT EXISTS orders (
   "companyPricePerKilo" FLOAT DEFAULT 0,
   "companyPricePerKiloUSD" FLOAT DEFAULT 0,
   "customerPricePerKilo" FLOAT DEFAULT 0,
+  
+  -- Additional Cost
   "addedCostUSD" FLOAT DEFAULT 0,
   "addedCostNotes" TEXT,
+  
+  -- Meta
   store TEXT,
   "paymentMethod" TEXT,
   "deliveryDate" TEXT,
@@ -63,48 +137,20 @@ CREATE TABLE IF NOT EXISTS orders (
   "customerAddress" TEXT,
   "customerPhone" TEXT,
   "collectedAmount" FLOAT DEFAULT 0,
-  "customerWeightCostUSD" FLOAT DEFAULT 0
+  "customerWeightCostUSD" FLOAT DEFAULT 0,
+  
+  -- Phase 6 Updates
+  images TEXT[], -- Array of strings
+  "cartUrl" TEXT,
+  "siteId" TEXT,
+  
+  -- Phase 10 Updates
+  "managerId" TEXT
 );
 
--- Add new financial columns to orders if they don't exist
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='shippingCostUSD') THEN
-        ALTER TABLE orders ADD COLUMN "shippingCostUSD" FLOAT DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='shippingPriceUSD') THEN
-        ALTER TABLE orders ADD COLUMN "shippingPriceUSD" FLOAT DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='companyWeightCostUSD') THEN
-        ALTER TABLE orders ADD COLUMN "companyWeightCostUSD" FLOAT DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='customerWeightCostUSD') THEN
-        ALTER TABLE orders ADD COLUMN "customerWeightCostUSD" FLOAT DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='weightKG') THEN
-        ALTER TABLE orders ADD COLUMN "weightKG" FLOAT DEFAULT 0;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='exchangeRate') THEN
-        ALTER TABLE orders ADD COLUMN "exchangeRate" FLOAT DEFAULT 1;
-    END IF;
-END $$;
-
--- Create System Settings table
-CREATE TABLE IF NOT EXISTS system_settings (
-  id TEXT PRIMARY KEY,
-  "exchangeRate" FLOAT DEFAULT 1,
-  "shippingCostUSD" FLOAT DEFAULT 0,
-  "shippingPriceUSD" FLOAT DEFAULT 0
-);
-
--- Insert default system settings if not exists
-INSERT INTO system_settings (id, "exchangeRate", "shippingCostUSD", "shippingPriceUSD")
-VALUES ('global', 1, 0, 0)
-ON CONFLICT (id) DO NOTHING;
-
--- Create Transactions table
-CREATE TABLE IF NOT EXISTS transactions (
-  id TEXT PRIMARY KEY,
+-- 9. Transactions Table
+CREATE TABLE IF NOT EXISTS transactions_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
   "orderId" TEXT,
   "customerId" TEXT,
   "customerName" TEXT,
@@ -112,15 +158,16 @@ CREATE TABLE IF NOT EXISTS transactions (
   type TEXT,
   status TEXT,
   amount FLOAT DEFAULT 0,
-  description TEXT
-);
-
--- Create Expenses table
-CREATE TABLE IF NOT EXISTS expenses (
-  id TEXT PRIMARY KEY,
   description TEXT,
-  amount FLOAT DEFAULT 0,
-  date TEXT
+  "managerId" TEXT
 );
 
--- Note: Ensure Row Level Security (RLS) policies are configured as needed for your application security.
+-- 10. Notifications Table
+CREATE TABLE IF NOT EXISTS notifications_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  message TEXT,
+  target TEXT,
+  "userId" TEXT,
+  timestamp TEXT,
+  "isRead" BOOLEAN DEFAULT FALSE
+);

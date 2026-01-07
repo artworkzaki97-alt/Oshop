@@ -780,9 +780,14 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
             }
 
             // Update the user's counter to the new max
-            await transaction.update(userRef, {
-                orderCounter: newOrderCount
-            });
+            try {
+                await transaction.update(userRef, {
+                    orderCounter: newOrderCount
+                });
+            } catch (err) {
+                console.warn("Failed to update user order counter (possibly missing column):", err);
+                // Proceed, as order is already created
+            }
 
             return orderRef;
         });
