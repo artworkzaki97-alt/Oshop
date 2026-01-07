@@ -27,6 +27,8 @@ import {
   BookUser,
   Zap,
   Package,
+  Globe,
+  CreditCard,
 } from 'lucide-react';
 import Image from 'next/image';
 import logo from '@/app/assets/logo.png';
@@ -49,7 +51,9 @@ const navItems = [
   { href: '/admin/employees', icon: Briefcase, label: 'إدارة المدراء', permissionId: 'employees' },
   { href: '/admin/representatives', icon: Bike, label: 'إدارة المندوبين', permissionId: 'representatives' },
   { href: '/admin/orders', icon: ShoppingCart, label: 'إدارة الطلبات', permissionId: 'orders' },
+  { href: '/admin/sites', icon: Globe, label: 'إدارة المواقع العالمية', permissionId: 'orders' },
   { href: '/admin/inventory', icon: Package, label: 'إدارة المخزون', permissionId: 'inventory' },
+  { href: '/admin/shein-cards', icon: CreditCard, label: 'بطاقات Shein', permissionId: 'inventory' },
   { href: '/admin/shipping-label', icon: Printer, label: 'إنشاء بوليصة شحن', permissionId: 'shipping_label' },
   { href: '/admin/temporary-users', icon: Users2, label: 'المستخدمين المؤقتين', permissionId: 'temporary_users' },
   { href: '/admin/financial-reports', icon: BarChart, label: 'التقارير المالية', permissionId: 'financial_reports' },
@@ -71,7 +75,9 @@ const getPageTitle = (pathname: string): string => {
     '/admin/representatives': 'إدارة المندوبين',
     '/admin/orders': 'إدارة الطلبات',
     '/admin/orders/add': 'إضافة/تعديل طلب',
+    '/admin/sites': 'إدارة المواقع العالمية',
     '/admin/inventory': 'إدارة المخزون',
+    '/admin/shein-cards': 'إدارة بطاقات Shein',
     '/admin/shipping-label': 'إنشاء بوليصة شحن يدوية',
     '/admin/shipping-label/history': 'سجل البوليصات اليدوية',
     '/admin/temporary-users': 'إدارة المستخدمين المؤقتين',

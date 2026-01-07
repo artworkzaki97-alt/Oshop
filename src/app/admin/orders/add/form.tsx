@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Calendar as CalendarIcon, DollarSign, Weight, Home, Loader2, QrCode, Check, ChevronsUpDown, Download } from "lucide-react";
+import { ArrowLeft, Calendar as CalendarIcon, DollarSign, Weight, Home, Loader2, QrCode, Check, ChevronsUpDown, Download, Link as LinkIcon, Image as ImageIcon, X, Sparkles, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,12 +16,25 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { User, Order, OrderStatus, AppSettings, TempOrder, SubOrder } from '@/lib/types';
-import { getUsers, addOrder, getAppSettings, getOrderById, updateOrder, getTempOrders, updateTempOrder } from '@/lib/actions';
+import { Order, User, GlobalSite, OrderStatus, SheinCard, AppSettings, TempOrder, SubOrder } from '@/lib/types';
+import {
+    getUsers,
+    addOrder,
+    updateOrder,
+    getGlobalSites,
+    findBestSheinCards,
+    useSheinCards,
+    addExpense,
+    getAppSettings,
+    getOrderById,
+    getTempOrders,
+    updateTempOrder
+} from '@/lib/actions';
 import { useToast } from "@/components/ui/use-toast";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { supabase } from '@/lib/supabase';
 
 
 const onlineStores = [
@@ -37,14 +50,15 @@ const AddOrderForm = () => {
     const searchParams = useSearchParams();
     const orderId = searchParams.get('id');
     const { toast } = useToast();
-    
+
     const [isLoadingPage, setIsLoadingPage] = useState(!!orderId);
     const [isSaving, setIsSaving] = useState(false);
     const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
     const [users, setUsers] = useState<User[]>([]);
     const [isUsersLoading, setIsUsersLoading] = useState(true);
     const [tempOrders, setTempOrders] = useState<TempOrder[]>([]);
-    
+    const [globalSites, setGlobalSites] = useState<GlobalSite[]>([]);
+
     const [selectedUserId, setSelectedUserId] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
@@ -60,10 +74,10 @@ const AddOrderForm = () => {
     const [addedCost, setAddedCost] = useState(0);
     const [addedCostCurrency, setAddedCostCurrency] = useState<'LYD' | 'USD'>('LYD');
     const [addedCostNotes, setAddedCostNotes] = useState('');
-    
+
     const [pricePerKilo, setPricePerKilo] = useState(0);
     const [pricePerKiloCurrency, setPricePerKiloCurrency] = useState<'LYD' | 'USD'>('USD');
-    
+
     const [selectedStore, setSelectedStore] = useState('');
     const [manualStoreName, setManualStoreName] = useState('');
     const [operationDate, setOperationDate] = useState<Date>(new Date());
@@ -71,6 +85,18 @@ const AddOrderForm = () => {
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [status, setStatus] = useState<OrderStatus>('pending');
     const [productLinks, setProductLinks] = useState('');
+    const [cartUrl, setCartUrl] = useState('');
+    const [imageUrls, setImageUrls] = useState<string[]>([]);
+
+    // Deduction Logic State
+    const [deductionMethod, setDeductionMethod] = useState<'manual' | 'shein_cards' | 'usdt_treasury'>('manual');
+    const [suggestedCards, setSuggestedCards] = useState<SheinCard[]>([]);
+    const [cardCoveredAmount, setCardCoveredAmount] = useState<number>(0);
+    const [cardRemainingAmount, setCardRemainingAmount] = useState<number>(0);
+    const [isAnalyzingCards, setIsAnalyzingCards] = useState<boolean>(false);
+
+    const [isUploading, setIsUploading] = useState(false);
+
     const [itemDescription, setItemDescription] = useState('');
     const [trackingId, setTrackingId] = useState('');
     const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -85,16 +111,18 @@ const AddOrderForm = () => {
         const fetchInitialData = async () => {
             setIsUsersLoading(true);
             try {
-                const [fetchedUsers, settings, fetchedTempOrders] = await Promise.all([
+                const [fetchedUsers, settings, fetchedTempOrders, fetchedSites] = await Promise.all([
                     getUsers(),
                     getAppSettings(),
                     getTempOrders(),
+                    getGlobalSites(),
                 ]);
                 setUsers(fetchedUsers);
                 setAppSettings(settings);
+                setGlobalSites(fetchedSites);
                 // Filter out temp orders that have already been converted
                 setTempOrders(fetchedTempOrders.filter(o => !o.parentInvoiceId));
-                
+
                 if (orderId) {
                     const existingOrder = await getOrderById(orderId);
                     if (existingOrder) {
@@ -105,13 +133,13 @@ const AddOrderForm = () => {
                         setCustomerAddress(existingOrder.customerAddress || '');
                         setPurchasePriceUSD(existingOrder.purchasePriceUSD || 0);
                         setCostExchangeRate(existingOrder.exchangeRate || settings.exchangeRate || 0);
-                        
+
                         const customerCostLYD = (existingOrder.customerWeightCost || 0) * (existingOrder.weightKG || 0);
                         const addedCostInLYD = (existingOrder.addedCostUSD || 0) * (existingOrder.exchangeRate || settings.exchangeRate || 1);
 
                         // Set the base selling price, excluding calculated costs
                         setSellingPriceLYD(existingOrder.sellingPriceLYD - customerCostLYD - addedCostInLYD);
-                        
+
                         setDownPaymentLYD(existingOrder.downPaymentLYD || 0);
                         setWeightKG(existingOrder.weightKG || 0);
                         setCustomerWeightCost(existingOrder.customerWeightCost || settings.pricePerKiloLYD || 0);
@@ -120,22 +148,32 @@ const AddOrderForm = () => {
                         setAddedCostNotes(existingOrder.addedCostNotes || '');
                         setTrackingId(existingOrder.trackingId);
                         setInvoiceNumber(existingOrder.invoiceNumber);
-                        
+
                         setPricePerKilo(existingOrder.pricePerKilo || settings.pricePerKiloUSD || 0);
                         setPricePerKiloCurrency(existingOrder.pricePerKiloCurrency || 'USD');
 
-                        const storeValue = onlineStores.find(s => s.value === existingOrder.store) ? existingOrder.store : 'other';
+                        let storeValue = existingOrder.store;
+                        // Check if store is in predefined list OR in fetched global sites
+                        const isPredefined = onlineStores.some(s => s.value === storeValue);
+                        const isGlobalSite = fetchedSites.some(s => s.id === existingOrder.siteId); // or checks name?
+                        // For legacy compatibility, we keep logic simple
+                        if (!isPredefined && !isGlobalSite) storeValue = 'other';
+                        else if (isGlobalSite) storeValue = existingOrder.siteId!;
+
                         setSelectedStore(storeValue || '');
                         if (storeValue === 'other') {
                             setManualStoreName(existingOrder.store || '');
                         }
 
                         setOperationDate(new Date(existingOrder.operationDate));
-                        if(existingOrder.deliveryDate) setDeliveryDate(new Date(existingOrder.deliveryDate));
+                        if (existingOrder.deliveryDate) setDeliveryDate(new Date(existingOrder.deliveryDate));
                         setPaymentMethod(existingOrder.paymentMethod || 'cash');
                         setStatus(existingOrder.status);
                         setProductLinks(existingOrder.productLinks);
+                        setCartUrl(existingOrder.cartUrl || '');
+                        setImageUrls(existingOrder.images || []);
                         setItemDescription(existingOrder.itemDescription || '');
+
                     } else {
                         toast({ title: "خطأ", description: "لم يتم العثور على الطلب.", variant: "destructive" });
                         router.push('/admin/orders');
@@ -167,7 +205,7 @@ const AddOrderForm = () => {
             setSelectedUserId(userId);
             setCustomerName(selectedUser.name);
             setCustomerPhone(selectedUser.phone);
-            setCustomerAddress(selectedUser.address || ''); 
+            setCustomerAddress(selectedUser.address || '');
         }
         setIsUserSearchOpen(false);
     };
@@ -176,9 +214,9 @@ const AddOrderForm = () => {
         setImportedTempOrderId(tempOrder.id);
         const totalPurchaseUSD = tempOrder.subOrders.reduce((sum, so) => sum + so.purchasePriceUSD, 0);
         const totalSellingLYD = tempOrder.totalAmount;
-        
+
         const totalPaidAmount = tempOrder.totalAmount - tempOrder.remainingAmount;
-        
+
         const totalWeightKG = tempOrder.subOrders.reduce((sum, so) => sum + so.weightKG, 0);
         const allLinks = tempOrder.subOrders.map(so => so.productLinks).filter(Boolean).join('\\n');
         const customerNames = tempOrder.subOrders.map(so => so.customerName).join(', ');
@@ -187,19 +225,19 @@ const AddOrderForm = () => {
 
         // If in edit mode, merge data. Otherwise, set it.
         if (orderId) {
-             setPurchasePriceUSD(prev => prev + totalPurchaseUSD);
-             setSellingPriceLYD(prev => prev + totalSellingLYD);
-             setDownPaymentLYD(prev => prev + totalPaidAmount); // Use total paid amount
-             setWeightKG(prev => prev + totalWeightKG);
-             setProductLinks(prev => prev ? `${prev}\\n${allLinks}` : allLinks);
-             setItemDescription(prev => prev ? `${prev} | ${description}` : description);
+            setPurchasePriceUSD(prev => prev + totalPurchaseUSD);
+            setSellingPriceLYD(prev => prev + totalSellingLYD);
+            setDownPaymentLYD(prev => prev + totalPaidAmount); // Use total paid amount
+            setWeightKG(prev => prev + totalWeightKG);
+            setProductLinks(prev => prev ? `${prev}\\n${allLinks}` : allLinks);
+            setItemDescription(prev => prev ? `${prev} | ${description}` : description);
         } else {
             if (tempOrder.assignedUserId) {
                 handleUserSelect(tempOrder.assignedUserId);
             } else {
-                 setCustomerName(tempOrder.invoiceName);
-                 setCustomerPhone(''); 
-                 setCustomerAddress('');
+                setCustomerName(tempOrder.invoiceName);
+                setCustomerPhone('');
+                setCustomerAddress('');
             }
             setPurchasePriceUSD(totalPurchaseUSD);
             setSellingPriceLYD(totalSellingLYD);
@@ -214,11 +252,11 @@ const AddOrderForm = () => {
                 setManualStoreName(tempOrder.subOrders[0].manualStoreName);
             }
         }
-        
+
         setIsImportDialogOpen(false);
-        toast({ title: "تم الاستيراد", description: `تم استيراد ودمج بيانات الفاتورة: ${tempOrder.invoiceName}`});
+        toast({ title: "تم الاستيراد", description: `تم استيراد ودمج بيانات الفاتورة: ${tempOrder.invoiceName}` });
     };
-    
+
     const purchaseCostLYD = useMemo(() => purchasePriceUSD * costExchangeRate, [purchasePriceUSD, costExchangeRate]);
     const shippingCostLYD = useMemo(() => {
         if (pricePerKiloCurrency === 'USD') {
@@ -226,7 +264,7 @@ const AddOrderForm = () => {
         }
         return weightKG * pricePerKilo;
     }, [weightKG, pricePerKilo, pricePerKiloCurrency, appSettings]);
-    
+
     const customerWeightCostLYD = useMemo(() => {
         const costPerKilo = customerWeightCost;
         if (customerWeightCostCurrency === 'USD') {
@@ -247,16 +285,68 @@ const AddOrderForm = () => {
     const netProfit = useMemo(() => finalSellingPrice - purchaseCostLYD - shippingCostLYD, [finalSellingPrice, purchaseCostLYD, shippingCostLYD]);
 
 
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        setIsUploading(true);
+        const files = Array.from(e.target.files);
+        const newUrls: string[] = [];
+
+        for (const file of files) {
+            try {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+                const filePath = `${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('order-images')
+                    .upload(filePath, file);
+
+                if (uploadError) {
+                    throw uploadError;
+                }
+
+                const { data } = supabase.storage.from('order-images').getPublicUrl(filePath);
+                newUrls.push(data.publicUrl);
+            } catch (error) {
+                console.error('Upload failed:', error);
+                toast({ title: 'فشل الرفع', description: `فشل رفع الملف ${file.name}`, variant: 'destructive' });
+            }
+        }
+        setImageUrls(prev => [...prev, ...newUrls]);
+        setIsUploading(false);
+    };
+
+    const removeImage = (index: number) => {
+        setImageUrls(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleAnalyzeCards = async () => {
+        setIsAnalyzingCards(true);
+        try {
+            const result = await findBestSheinCards(purchasePriceUSD);
+            setSuggestedCards(result.cards);
+            setCardCoveredAmount(result.coveredAmount);
+            setCardRemainingAmount(result.remainingAmount);
+            toast({ title: "تم تحليل البطاقات", description: `تم العثور على ${result.cards.length} بطاقة تغطي ${result.coveredAmount}$` });
+        } catch (error) {
+            console.error(error);
+            toast({ title: "خطأ", description: "فشل في تحليل البطاقات", variant: "destructive" });
+        } finally {
+            setIsAnalyzingCards(false);
+        }
+    };
+
     const handleSaveOrder = async () => {
         setIsSaving(true);
         if (!selectedUserId) {
-            toast({ title: "خطأ", description: "الرجاء اختيار مستخدم مسجل أولاً.", variant: "destructive"});
+            toast({ title: "خطأ", description: "الرجاء اختيار مستخدم مسجل أولاً.", variant: "destructive" });
             setIsSaving(false);
             return;
         }
         if (!operationDate) {
-             toast({ title: "خطأ", description: "الرجاء تحديد تاريخ العملية.", variant: "destructive"});
-             setIsSaving(false);
+            toast({ title: "خطأ", description: "الرجاء تحديد تاريخ العملية.", variant: "destructive" });
+            setIsSaving(false);
             return;
         }
 
@@ -279,44 +369,70 @@ const AddOrderForm = () => {
             addedCostNotes: addedCostNotes,
             pricePerKilo: pricePerKilo,
             pricePerKiloCurrency: pricePerKiloCurrency,
-            store: selectedStore === 'other' ? manualStoreName : selectedStore,
+
             paymentMethod,
             deliveryDate: deliveryDate?.toISOString(),
             itemDescription,
             shippingCostLYD: shippingCostLYD,
             trackingId: trackingId,
+            images: imageUrls,
+            cartUrl: cartUrl,
+            siteId: globalSites.find(s => s.id === selectedStore)?.id,
+            store: selectedStore === 'other' ? manualStoreName : (globalSites.find(s => s.id === selectedStore)?.name || selectedStore),
         };
 
         try {
             let savedOrder: Order | null = null;
             if (orderId && orderData) {
-                 const updateData: Partial<Omit<Order, 'id'>> = {
+                const updateData: Partial<Omit<Order, 'id'>> = {
                     ...commonOrderData,
-                    exchangeRate: costExchangeRate, 
+                    exchangeRate: costExchangeRate,
                     representativeId: orderData.representativeId,
                     representativeName: orderData.representativeName,
                     collectedAmount: orderData.collectedAmount,
                 };
                 await updateOrder(orderId, updateData);
                 savedOrder = { ...orderData, ...updateData, id: orderId };
-                toast({ title: "تم التحديث بنجاح", description: "تم تحديث بيانات الطلب."});
-                
+                toast({ title: "تم التحديث بنجاح", description: "تم تحديث بيانات الطلب." });
+
             } else {
-                 const newOrderData: Omit<Order, 'id' | 'invoiceNumber'> = {
+                const newOrderData: Omit<Order, 'id' | 'invoiceNumber'> = {
                     ...commonOrderData,
                     exchangeRate: costExchangeRate,
-                    representativeId: null, 
+                    representativeId: null,
                     representativeName: null,
                     collectedAmount: 0,
-                 };
-                
-                 savedOrder = await addOrder(newOrderData);
+                };
 
-                if(!savedOrder) {
+                savedOrder = await addOrder(newOrderData);
+
+                if (!savedOrder) {
                     throw new Error("Failed to add order in the form.");
                 }
 
-                toast({ title: "تم الحفظ بنجاح", description: "تم تسجيل العملية الجديدة في النظام."});
+                // --- SMART DEDUCTION LOGIC ---
+                if (deductionMethod === 'shein_cards' && suggestedCards.length > 0) {
+                    await useSheinCards(suggestedCards.map(c => c.id), savedOrder.id);
+                    if (cardRemainingAmount > 0) {
+                        // Create Expense for remainder
+                        await addExpense({
+                            description: `Cost for Order #${savedOrder.invoiceNumber} (Partial via Shein Remainder)`,
+                            amount: cardRemainingAmount,
+                            date: new Date().toISOString(),
+                            managerId: undefined // We don't have it here yet
+                        });
+                    }
+                } else if (deductionMethod === 'usdt_treasury') {
+                    await addExpense({
+                        description: `Cost of Goods - Order #${savedOrder.invoiceNumber}`,
+                        amount: purchasePriceUSD,
+                        date: new Date().toISOString(),
+                        managerId: undefined
+                    });
+                }
+                // -----------------------------
+
+                toast({ title: "تم الحفظ بنجاح", description: "تم تسجيل العملية الجديدة في النظام." });
             }
 
             if (importedTempOrderId && savedOrder) {
@@ -326,9 +442,9 @@ const AddOrderForm = () => {
 
             router.push('/admin/orders');
 
-        } catch(error) {
+        } catch (error) {
             console.error("Failed to save order:", error);
-            toast({ title: "حدث خطأ", description: "فشل حفظ العملية.", variant: "destructive"});
+            toast({ title: "حدث خطأ", description: "فشل حفظ العملية.", variant: "destructive" });
         } finally {
             setIsSaving(false);
         }
@@ -336,7 +452,7 @@ const AddOrderForm = () => {
 
     if (isLoadingPage) {
         return (
-             <div className="flex justify-center items-center h-screen">
+            <div className="flex justify-center items-center h-screen">
                 <Loader2 className="w-12 h-12 animate-spin text-primary" />
             </div>
         )
@@ -360,18 +476,18 @@ const AddOrderForm = () => {
                             <Popover open={isUserSearchOpen} onOpenChange={setIsUserSearchOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    aria-expanded={isUserSearchOpen}
-                                    className="w-full justify-between"
-                                    disabled={isUsersLoading || !!orderId}
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isUserSearchOpen}
+                                        className="w-full justify-between"
+                                        disabled={isUsersLoading || !!orderId}
                                     >
-                                    {isUsersLoading 
-                                        ? "جاري تحميل المستخدمين..." 
-                                        : selectedUserId
-                                        ? users.find((user) => user.id === selectedUserId)?.name
-                                        : "ابحث عن مستخدم..."}
-                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        {isUsersLoading
+                                            ? "جاري تحميل المستخدمين..."
+                                            : selectedUserId
+                                                ? users.find((user) => user.id === selectedUserId)?.name
+                                                : "ابحث عن مستخدم..."}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
@@ -381,19 +497,19 @@ const AddOrderForm = () => {
                                             <CommandEmpty>لم يتم العثور على مستخدم.</CommandEmpty>
                                             <CommandGroup>
                                                 {users.map((user) => (
-                                                <CommandItem
-                                                    key={user.id}
-                                                    value={`${user.name} ${user.username} ${user.phone}`}
-                                                    onSelect={() => handleUserSelect(user.id)}
-                                                >
-                                                    <Check
-                                                    className={cn(
-                                                        "mr-2 h-4 w-4",
-                                                        selectedUserId === user.id ? "opacity-100" : "opacity-0"
-                                                    )}
-                                                    />
-                                                    {user.name} ({user.username})
-                                                </CommandItem>
+                                                    <CommandItem
+                                                        key={user.id}
+                                                        value={`${user.name} ${user.username} ${user.phone}`}
+                                                        onSelect={() => handleUserSelect(user.id)}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                "mr-2 h-4 w-4",
+                                                                selectedUserId === user.id ? "opacity-100" : "opacity-0"
+                                                            )}
+                                                        />
+                                                        {user.name} ({user.username})
+                                                    </CommandItem>
                                                 ))}
                                             </CommandGroup>
                                         </CommandList>
@@ -401,10 +517,10 @@ const AddOrderForm = () => {
                                 </PopoverContent>
                             </Popover>
                         </FormField>
-                        
+
                         <div className="space-y-2">
-                             <Label>استيراد بيانات (اختياري)</Label>
-                             <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                            <Label>استيراد بيانات (اختياري)</Label>
+                            <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
                                 <DialogTrigger asChild>
                                     <Button variant="outline" className="w-full gap-2">
                                         <Download className="w-4 h-4" />
@@ -420,7 +536,7 @@ const AddOrderForm = () => {
                                     </DialogHeader>
                                     <div className="max-h-[60vh] overflow-y-auto p-1">
                                         {tempOrders.map(tOrder => (
-                                            <Button 
+                                            <Button
                                                 key={tOrder.id}
                                                 variant="ghost"
                                                 className="w-full justify-start text-right h-auto flex-col items-start"
@@ -428,7 +544,7 @@ const AddOrderForm = () => {
                                             >
                                                 <span className="font-bold">{tOrder.invoiceName}</span>
                                                 <span className="text-xs text-muted-foreground">
-                                                   الإجمالي: {tOrder.totalAmount.toFixed(2)} د.ل | العملاء: {tOrder.subOrders.length}
+                                                    الإجمالي: {tOrder.totalAmount.toFixed(2)} د.ل | العملاء: {tOrder.subOrders.length}
                                                 </span>
                                             </Button>
                                         ))}
@@ -445,7 +561,7 @@ const AddOrderForm = () => {
                             <Input id="customer-phone" placeholder="09xxxxxxxx" dir="ltr" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
                         </FormField>
                     </div>
-                     <div className="pt-4">
+                    <div className="pt-4">
                         <FormField label="العنوان" id="customer-address" icon={<Home className="w-4 h-4 text-muted-foreground" />}>
                             <Textarea id="customer-address" placeholder="اذكر المدينة والشارع وأقرب نقطة دالة" rows={2} value={customerAddress} onChange={e => setCustomerAddress(e.target.value)} />
                         </FormField>
@@ -453,7 +569,7 @@ const AddOrderForm = () => {
                 </FormSection>
 
                 <FormSection title="تفاصيل العملية والأسعار">
-                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <FormField label="سعر الشراء (بالدولار)" id="purchase-price-usd">
                             <Input type="number" id="purchase-price-usd" value={purchasePriceUSD} onChange={e => setPurchasePriceUSD(parseFloat(e.target.value) || 0)} dir="ltr" />
                         </FormField>
@@ -467,14 +583,14 @@ const AddOrderForm = () => {
                             <Input type="number" id="down-payment-lyd" value={downPaymentLYD} onChange={e => setDownPaymentLYD(parseFloat(e.target.value) || 0)} dir="ltr" />
                         </FormField>
                     </div>
-                     <div className="grid sm:grid-cols-2 gap-4 pt-4 items-start">
+                    <div className="grid sm:grid-cols-2 gap-4 pt-4 items-start">
                         <div className="space-y-2">
-                             <Label>التكلفة الإضافية</Label>
+                            <Label>التكلفة الإضافية</Label>
                             <div className="flex gap-2">
-                                <Input 
-                                    type="number" 
-                                    value={addedCost} 
-                                    onChange={e => setAddedCost(parseFloat(e.target.value) || 0)} 
+                                <Input
+                                    type="number"
+                                    value={addedCost}
+                                    onChange={e => setAddedCost(parseFloat(e.target.value) || 0)}
                                     dir="ltr"
                                     className="w-full"
                                 />
@@ -495,7 +611,7 @@ const AddOrderForm = () => {
                         </FormField>
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
-                         <FormField label="طريقة السداد" id="payment-method">
+                        <FormField label="طريقة السداد" id="payment-method">
                             <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="flex gap-4 pt-2">
                                 <div className="flex items-center space-x-2 space-x-reverse">
                                     <RadioGroupItem value="cash" id="cash" />
@@ -527,19 +643,19 @@ const AddOrderForm = () => {
                             </Select>
                         </FormField>
                         <FormField label={orderId ? "كود التتبع" : "كود التتبع (اختياري)"} id="tracking-id-input" icon={<QrCode className="w-4 h-4 text-muted-foreground" />}>
-                            <Input 
-                                value={trackingId} 
-                                onChange={e => setTrackingId(e.target.value.toUpperCase())} 
+                            <Input
+                                value={trackingId}
+                                onChange={e => setTrackingId(e.target.value.toUpperCase())}
                                 placeholder={orderId ? "" : "فارغ لتوليد كود تلقائي"}
                                 dir="ltr"
                             />
                         </FormField>
                     </div>
                 </FormSection>
-                
-                 <FormSection title="المتجر الإلكتروني وروابط المنتجات">
+
+                <FormSection title="المتجر الإلكتروني وروابط المنتجات">
                     <div className="grid sm:grid-cols-2 gap-4">
-                         <FormField label="المتجر الإلكتروني" id="online-store">
+                        <FormField label="المتجر الإلكتروني" id="online-store">
                             <Select value={selectedStore} onValueChange={setSelectedStore}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="اختر المتجر" />
@@ -547,6 +663,10 @@ const AddOrderForm = () => {
                                 <SelectContent>
                                     {onlineStores.map(store => (
                                         <SelectItem key={store.value} value={store.value}>{store.label}</SelectItem>
+                                    ))}
+                                    {globalSites.length > 0 && <div className="border-t my-1"></div>}
+                                    {globalSites.map(site => (
+                                        <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -556,17 +676,140 @@ const AddOrderForm = () => {
                                 <Input value={manualStoreName} onChange={e => setManualStoreName(e.target.value)} placeholder="أدخل اسم المتجر" />
                             </FormField>
                         )}
+                        <FormField label="رابط السلة (Cart URL)" id="cart-url" icon={<LinkIcon className="w-4 h-4 text-muted-foreground" />}>
+                            <Input value={cartUrl} onChange={e => setCartUrl(e.target.value)} placeholder="رابط سلة الشراء المباشر" dir="ltr" />
+                        </FormField>
+                    </div>
+                    <div className="pt-4">
+                        <FormField label="صورة الطلب / السلة" id="order-images">
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-4">
+                                    <Input
+                                        type="file"
+                                        multiple
+                                        accept="image/*"
+                                        className="hidden"
+                                        id="image-upload"
+                                        onChange={handleImageUpload}
+                                        disabled={isUploading}
+                                    />
+                                    <Label htmlFor="image-upload" className={`flex cursor-pointer items-center justify-center rounded-md border border-dashed p-4 hover:bg-muted/50 w-full sm:w-auto ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        {isUploading ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                جاري الرفع...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ImageIcon className="mr-2 h-4 w-4" />
+                                                رفع صور
+                                            </>
+                                        )}
+                                    </Label>
+                                </div>
+                                {imageUrls.length > 0 && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                        {imageUrls.map((url, index) => (
+                                            <div key={index} className="relative group">
+                                                <img src={url} alt={`Order image ${index + 1}`} className="w-full h-24 object-cover rounded-md border" />
+                                                <button
+                                                    onClick={() => removeImage(index)}
+                                                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    type="button"
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </FormField>
                     </div>
                     <div className="pt-4">
                         <FormField label="روابط المنتجات" id="product-links">
-                            <Textarea value={productLinks} onChange={(e) => setProductLinks(e.target.value)} id="product-links" placeholder="ضع كل رابط في سطر مستقل" rows={4} />
+                            <Textarea value={productLinks} onChange={(e) => setProductLinks(e.target.value)} id="product-links" placeholder="ضع كل رابط في سطر مستقل" rows={4} dir="ltr" />
                         </FormField>
+                    </div>
+                </FormSection>
+
+                <FormSection title="خصم التكلفة (Treasury)">
+                    <div className="space-y-4">
+                        <FormField label="طريقة خصم التكلفة" id="deduction-method">
+                            <RadioGroup value={deductionMethod} onValueChange={(val: any) => setDeductionMethod(val)} className="flex flex-wrap gap-4 pt-2">
+                                <div className="flex items-center space-x-2 space-x-reverse border p-3 rounded-md has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                    <RadioGroupItem value="manual" id="dm-manual" />
+                                    <Label htmlFor="dm-manual" className="cursor-pointer">يدوي / لا يوجد خصم</Label>
+                                </div>
+                                <div className="flex items-center space-x-2 space-x-reverse border p-3 rounded-md has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                    <RadioGroupItem value="usdt_treasury" id="dm-treasury" />
+                                    <Label htmlFor="dm-treasury" className="cursor-pointer">خزينة USDT (إضافة مصروف)</Label>
+                                </div>
+                                <div className="flex items-center space-x-2 space-x-reverse border p-3 rounded-md has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
+                                    <RadioGroupItem value="shein_cards" id="dm-shein" />
+                                    <Label htmlFor="dm-shein" className="cursor-pointer">بطاقات Shein (خصم آلي)</Label>
+                                </div>
+                            </RadioGroup>
+                        </FormField>
+
+                        {deductionMethod === 'shein_cards' && (
+                            <div className="bg-muted/30 p-4 rounded-lg border border-dashed space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="font-semibold text-sm">تحليل البطاقات المقترحة</h4>
+                                        <p className="text-xs text-muted-foreground">سيتم اختيار أنسب البطاقات لتغطية مبلغ {purchasePriceUSD}$</p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        className="gap-2"
+                                        onClick={handleAnalyzeCards}
+                                        disabled={isAnalyzingCards || purchasePriceUSD <= 0}
+                                    >
+                                        {isAnalyzingCards ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                                        تحليل البطاقات
+                                    </Button>
+                                </div>
+
+                                {suggestedCards.length > 0 && (
+                                    <div className="space-y-3 animation-in slide-in-from-top-2 fade-in">
+                                        <div className="border rounded-md bg-background overflow-hidden">
+                                            <table className="w-full text-xs">
+                                                <thead className="bg-muted text-muted-foreground">
+                                                    <tr>
+                                                        <th className="p-2 text-right">الكود</th>
+                                                        <th className="p-2 text-left">القيمة</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {suggestedCards.map(card => (
+                                                        <tr key={card.id}>
+                                                            <td className="p-2 font-mono">{card.code}</td>
+                                                            <td className="p-2 text-left font-bold">{card.value}$</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm pt-2 border-t font-medium">
+                                            <span>المبلغ المغطى: <span className="text-green-600">{cardCoveredAmount}$</span></span>
+                                            <span>المتبقي (USDT): <span className="text-orange-600">{cardRemainingAmount}$</span></span>
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 text-destructive">
+                                            <AlertCircle className="w-3 h-3" />
+                                            تنبيه: سيتم وضع علامة "مستخدم" على هذه البطاقات عند الحفظ.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </FormSection>
 
                 <FormSection title="التواريخ">
                     <div className="grid sm:grid-cols-2 gap-4">
-                         <FormField label="تاريخ العملية" id="operation-date">
+                        <FormField label="تاريخ العملية" id="operation-date">
                             <DatePopover date={operationDate} setDate={(date) => date && setOperationDate(date)} />
                         </FormField>
                         <FormField label="موعد التسليم المتوقع" id="delivery-date">
@@ -576,17 +819,17 @@ const AddOrderForm = () => {
                 </FormSection>
 
                 <FormSection title="بيانات وتكاليف الشحن">
-                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-6">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-6">
                         <FormField label="وصف السلعة" id="item-description">
                             <Input value={itemDescription} onChange={e => setItemDescription(e.target.value)} id="item-description" placeholder="وصف مختصر للشحنة" />
                         </FormField>
                         <FormField label="الوزن (كغ)" id="weight-kg" icon={<Weight className="w-4 h-4 text-muted-foreground" />}>
                             <Input type="number" id="weight-kg" value={weightKG} onChange={e => setWeightKG(parseFloat(e.target.value) || 0)} dir="ltr" />
                         </FormField>
-                         <div className="space-y-2">
-                             <Label>سعر الكيلو (للشركة)</Label>
+                        <div className="space-y-2">
+                            <Label>سعر الكيلو (للشركة)</Label>
                             <div className="flex gap-2">
-                                <Input 
+                                <Input
                                     type="number"
                                     value={pricePerKilo}
                                     onChange={e => setPricePerKilo(parseFloat(e.target.value) || 0)}
@@ -604,14 +847,14 @@ const AddOrderForm = () => {
                                     </div>
                                 </RadioGroup>
                             </div>
-                         </div>
-                          <div className="space-y-2">
-                             <Label>سعر الكيلو (للزبون)</Label>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>سعر الكيلو (للزبون)</Label>
                             <div className="flex gap-2">
-                                <Input 
-                                    type="number" 
-                                    value={customerWeightCost} 
-                                    onChange={e => setCustomerWeightCost(parseFloat(e.target.value) || 0)} 
+                                <Input
+                                    type="number"
+                                    value={customerWeightCost}
+                                    onChange={e => setCustomerWeightCost(parseFloat(e.target.value) || 0)}
                                     dir="ltr"
                                     className="w-full"
                                 />
@@ -626,28 +869,28 @@ const AddOrderForm = () => {
                                     </div>
                                 </RadioGroup>
                             </div>
-                         </div>
+                        </div>
                     </div>
                 </FormSection>
 
                 <FormSection title="الحسابات الآلية">
                     <div className='text-xs text-muted-foreground mb-2'>سعر الصرف المستخدم في الحسابات: 1 دولار = {costExchangeRate.toFixed(2)} دينار</div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-muted/30 rounded-lg border">
-                       <CalculationBox label="تكلفة الشحن (دينار)" value={shippingCostLYD} />
-                       <CalculationBox label="تكلفة الشراء (دينار)" value={purchaseCostLYD} />
-                       <CalculationBox label="إجمالي البيع" value={finalSellingPrice} />
-                       <CalculationBox label="المبلغ المتبقي" value={remainingAmount} isWarning={remainingAmount > 0} />
-                       <CalculationBox label="صافي الربح" value={netProfit} isProfit={true} />
+                        <CalculationBox label="تكلفة الشحن (دينار)" value={shippingCostLYD} />
+                        <CalculationBox label="تكلفة الشراء (دينار)" value={purchaseCostLYD} />
+                        <CalculationBox label="إجمالي البيع" value={finalSellingPrice} />
+                        <CalculationBox label="المبلغ المتبقي" value={remainingAmount} isWarning={remainingAmount > 0} />
+                        <CalculationBox label="صافي الربح" value={netProfit} isProfit={true} />
                     </div>
                 </FormSection>
             </div>
-            
+
             <div className="flex justify-end gap-2 mt-8">
-                 <Button variant="outline" onClick={() => router.back()}>إلغاء</Button>
-                 <Button onClick={handleSaveOrder} disabled={isSaving}>
+                <Button variant="outline" onClick={() => router.back()}>إلغاء</Button>
+                <Button onClick={handleSaveOrder} disabled={isSaving}>
                     {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
                     {orderId ? 'حفظ التعديلات' : 'حفظ العملية'}
-                 </Button>
+                </Button>
             </div>
         </div>
     );
@@ -676,7 +919,7 @@ const FormField = ({ id, label, children, icon }: { id: string, label: string, c
 );
 
 const DatePopover = ({ date, setDate }: { date?: Date, setDate: (date?: Date) => void }) => (
-     <Popover>
+    <Popover>
         <PopoverTrigger asChild>
             <Button
                 variant={"outline"}
@@ -714,4 +957,3 @@ export default AddOrderForm;
 
 
 
-    

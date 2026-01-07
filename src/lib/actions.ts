@@ -2,9 +2,15 @@
 // lib/actions.ts
 "use server";
 
+import { cookies } from 'next/headers';
+
 import { dbAdapter } from "./db-adapter";
 import { where, increment, arrayUnion } from "./db-adapter";
-import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale, SystemSettings, Product } from "./types";
+import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard } from "./types";
+
+// ... (existing code)
+
+const SHEIN_CARDS_COLLECTION = 'shein_cards_v4';
 
 // Map adapter methods to Firebase names for minimal code changes
 const db = dbAdapter;
@@ -99,6 +105,7 @@ const CREDITORS_COLLECTION = 'creditors_v4';
 const MANUAL_LABELS_COLLECTION = 'manual_labels_v4';
 const INSTANT_SALES_COLLECTION = 'instant_sales_v4';
 const PRODUCTS_COLLECTION = 'products_v4';
+const GLOBAL_SITES_COLLECTION = 'global_sites_v4';
 
 
 // --- Recalculation Function for Data Integrity ---
@@ -410,7 +417,6 @@ export async function getOrdersByUserId(userId: string): Promise<Order[]> {
     }
 }
 
-
 export async function getUserByPhone(phone: string): Promise<User | null> {
     try {
         const q = query(collection(db, USERS_COLLECTION), where("phone", "==", phone));
@@ -425,6 +431,49 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
         return null;
     }
 }
+
+
+// --- Global Sites Actions ---
+export async function getGlobalSites(): Promise<GlobalSite[]> {
+    try {
+        const querySnapshot = await getDocs(collection(db, GLOBAL_SITES_COLLECTION));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GlobalSite));
+    } catch (error) {
+        console.error("Error getting global sites:", error);
+        return [];
+    }
+}
+
+export async function addGlobalSite(site: Omit<GlobalSite, 'id'>): Promise<GlobalSite | null> {
+    try {
+        const docRef = await addDoc(collection(db, GLOBAL_SITES_COLLECTION), site);
+        return { id: docRef.id, ...site };
+    } catch (error) {
+        console.error("Error adding global site:", error);
+        return null;
+    }
+}
+
+export async function updateGlobalSite(id: string, updates: Partial<GlobalSite>): Promise<void> {
+    try {
+        const docRef = doc(db, GLOBAL_SITES_COLLECTION, id);
+        await updateDoc(docRef, updates);
+    } catch (error) {
+        console.error("Error updating global site:", error);
+        throw error;
+    }
+}
+
+export async function deleteGlobalSite(id: string): Promise<void> {
+    try {
+        const docRef = doc(db, GLOBAL_SITES_COLLECTION, id);
+        await deleteDoc(docRef);
+    } catch (error) {
+        console.error("Error deleting global site:", error);
+        throw error;
+    }
+}
+
 
 export async function addUser(user: Omit<User, 'id'>): Promise<User | null> {
     try {
@@ -622,47 +671,6 @@ export async function getOrderByTrackingId(trackingId: string): Promise<Order | 
 }
 
 export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): Promise<Order | null> {
-    try {
-        const newDocRef = await runTransaction(db, async (transaction) => {
-            const userRef = doc(db, USERS_COLLECTION, orderData.userId);
-            const userDoc = await transaction.get(userRef);
-
-            if (!userDoc.exists()) {
-                throw new Error(`User with ID ${orderData.userId} does not exist!`);
-            }
-
-            const settings = await getAppSettings();
-            const userData = userDoc.data();
-
-            // --- NEW LOGIC: DYNAMIC SEQUENCE CALCULATION ---
-            // 1. Fetch all existing orders for this user to find the max invoice number
-            // Note: In a transaction, we can't easily do a query. 
-            // Ideally, we trust `orderCounter`, but the user says it's out of sync.
-            // Since we can't do a query inside a transaction on a different collection easily without reading potentially thousands of docs which is costly,
-            // we will try to rely on a "best effort" check OR we must do the query *before* the transaction (but that has race condition risks, though low for a single user).
-            // BETTER APPROACH given `dbAdapter`: We can do a query before. Races are unlikely for a single user adding orders sequentially.
-            // However, to be safe and robust as per request:
-
-            // Let's do the query BEFORE the transaction to get the "current max known".
-            // Then inside transaction we can double check or just use it. 
-            // Since we're inside `runTransaction` callback here, we can't await a query easily if the adapter doesn't support it inside tx.
-            // `dbAdapter` seems to be a wrapper around Firestore or similar.
-            // Let's assume we can query outside.
-            // BUT, `runTransaction` expects a synchronous-looking async function.
-
-            // Let's refactor: Get the max order number first, outside the transaction.
-            throw new Error("REFACTOR_NEEDED_MOVED_LOGIC_OUTSIDE");
-        });
-        return null; // Should not reach here due to error throw
-    } catch (error) {
-        if (error.message === "REFACTOR_NEEDED_MOVED_LOGIC_OUTSIDE") {
-            // Continue below
-        } else {
-            console.error("Error adding order:", error);
-            return null;
-        }
-    }
-
     // --- REFACTORED LOGIC ---
     try {
         // 1. Find the highest existing sequence number
@@ -677,6 +685,19 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
         const userDocSnap = await getDoc(userDocRef);
         const userData = userDocSnap.exists() ? userDocSnap.data() : {};
         const username = userData.username || 'USER';
+
+        // Get Manager ID from cookies
+        const cookieStore = cookies();
+        const managerCookie = cookieStore.get('manager');
+        let managerId: string | undefined = orderData.managerId;
+        if (!managerId && managerCookie) {
+            try {
+                const val = JSON.parse(managerCookie.value);
+                managerId = val.id;
+            } catch {
+                managerId = managerCookie.value;
+            }
+        }
 
         // Check based on stored counter first
         if (userData.orderCounter) {
@@ -698,7 +719,7 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
         });
 
         // 2. Perform Transaction to create the new order
-        return await runTransaction(db, async (transaction) => {
+        const newDocRef = await runTransaction(db, async (transaction) => {
             const userRef = doc(db, USERS_COLLECTION, orderData.userId);
             const userDoc = await transaction.get(userRef); // Get fresh user data
 
@@ -724,6 +745,7 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
                 trackingId: finalTrackingId,
                 exchangeRate: settings.exchangeRate,
                 remainingAmount: remainingAmount,
+                managerId: managerId,
             };
 
             const orderRef = doc(collection(db, ORDERS_COLLECTION));
@@ -769,7 +791,14 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
             const newOrderSnap = await getDoc(newDocRef);
             if (newOrderSnap.exists()) {
                 const newOrderData = { id: newOrderSnap.id, ...newOrderSnap.data() } as Order;
-                await recalculateUserStats(newOrderData.userId);
+
+                // Safe Stats Recalculation
+                try {
+                    await recalculateUserStats(newOrderData.userId);
+                } catch (recalcError) {
+                    console.error("Warning: Failed to recalculate user stats after order creation:", recalcError);
+                }
+
                 return newOrderData;
             }
         }
@@ -1780,8 +1809,22 @@ export async function getExpenses(): Promise<Expense[]> {
 
 export async function addExpense(expense: Omit<Expense, 'id'>): Promise<Expense | null> {
     try {
-        const docRef = await addDoc(collection(db, EXPENSES_COLLECTION), expense);
-        return { id: docRef.id, ...expense };
+        // Get Manager ID
+        const cookieStore = cookies();
+        const managerCookie = cookieStore.get('manager');
+        let managerId: string | undefined = expense.managerId;
+        if (!managerId && managerCookie) {
+            try {
+                const val = JSON.parse(managerCookie.value);
+                managerId = val.id;
+            } catch {
+                managerId = managerCookie.value;
+            }
+        }
+        const finalExpense = { ...expense, managerId };
+
+        const docRef = await addDoc(collection(db, EXPENSES_COLLECTION), finalExpense);
+        return { id: docRef.id, ...finalExpense };
     } catch (error) {
         console.error("Error adding expense:", error);
         return null;
@@ -1807,6 +1850,18 @@ export async function getDeposits(): Promise<Deposit[]> {
         return deposits.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     } catch (error) {
         console.error("Error getting deposits:", error);
+        return [];
+    }
+}
+
+export async function getDepositsByUserId(userId: string): Promise<Deposit[]> {
+    try {
+        const q = query(collection(db, DEPOSITS_COLLECTION), where("userId", "==", userId));
+        const querySnapshot = await getDocs(q);
+        const deposits = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deposit));
+        return deposits.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (error) {
+        console.error("Error getting deposits by user:", error);
         return [];
     }
 }
@@ -1837,19 +1892,7 @@ export async function getDepositsByRepresentativeId(repId: string): Promise<Depo
     }
 }
 
-export async function getDepositsByUserId(userId: string): Promise<Deposit[]> {
-    try {
-        const user = await getUserById(userId);
-        if (!user || !user.phone) return [];
 
-        const q = query(collection(db, DEPOSITS_COLLECTION), where("customerPhone", "==", user.phone));
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deposit));
-    } catch (error) {
-        console.error("Error getting deposits for user:", error);
-        return [];
-    }
-}
 
 export async function addDeposit(deposit: Omit<Deposit, 'id' | 'receiptNumber' | 'collectedDate'>): Promise<Deposit | null> {
     try {
@@ -2239,5 +2282,101 @@ export async function bulkImport(collectionName: string, data: any[]): Promise<{
     } catch (e: any) {
         console.error("Bulk import exception:", e);
         return { success: false, count: 0, error: e.message };
+    }
+}
+
+// --- Shein Cards Actions ---
+export async function getSheinCards(): Promise<SheinCard[]> {
+    try {
+        const querySnapshot = await getDocs(collection(db, SHEIN_CARDS_COLLECTION));
+        const cards = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SheinCard));
+        // Sort by status (available first), then date
+        return cards.sort((a, b) => {
+            if (a.status === 'available' && b.status !== 'available') return -1;
+            if (a.status !== 'available' && b.status === 'available') return 1;
+            return new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime();
+        });
+    } catch (error) {
+        console.error("Error getting shein cards:", error);
+        return [];
+    }
+}
+
+export async function getAvailableSheinCards(): Promise<SheinCard[]> {
+    try {
+        const q = query(collection(db, SHEIN_CARDS_COLLECTION), where("status", "==", "available"));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SheinCard));
+    } catch (error) {
+        console.error("Error getting available shein cards:", error);
+        return [];
+    }
+}
+
+export async function addSheinCard(card: Omit<SheinCard, 'id'>): Promise<SheinCard | null> {
+    try {
+        const docRef = await addDoc(collection(db, SHEIN_CARDS_COLLECTION), card);
+        return { id: docRef.id, ...card };
+    } catch (error) {
+        console.error("Error adding shein card:", error);
+        return null;
+    }
+}
+
+export async function updateSheinCard(id: string, updates: Partial<SheinCard>): Promise<void> {
+    try {
+        const docRef = doc(db, SHEIN_CARDS_COLLECTION, id);
+        await updateDoc(docRef, updates);
+    } catch (error) {
+        console.error("Error updating shein card:", error);
+        throw error;
+    }
+}
+
+export async function deleteSheinCard(id: string): Promise<void> {
+    try {
+        const docRef = doc(db, SHEIN_CARDS_COLLECTION, id);
+        await deleteDoc(docRef);
+    } catch (error) {
+        console.error("Error deleting shein card:", error);
+        throw error;
+    }
+}
+
+export async function findBestSheinCards(targetAmount: number): Promise<{ cards: SheinCard[], coveredAmount: number, remainingAmount: number }> {
+    const availableCards = await getAvailableSheinCards();
+    // Sort by value ascending to use smaller cards first? Or descending?
+    // Let's use Descending to use fewer cards for large amounts.
+    availableCards.sort((a, b) => b.value - a.value);
+
+    let covered = 0;
+    const selectedCards: SheinCard[] = [];
+
+    for (const card of availableCards) {
+        if (covered >= targetAmount) break;
+        selectedCards.push(card);
+        covered += card.value;
+    }
+
+    return {
+        cards: selectedCards,
+        coveredAmount: covered,
+        remainingAmount: Math.max(0, targetAmount - covered)
+    };
+}
+
+export async function useSheinCards(cardIds: string[], orderId: string): Promise<void> {
+    try {
+        const promises = cardIds.map(id =>
+            updateSheinCard(id, {
+                status: 'used',
+                usedAt: new Date().toISOString(),
+                usedForOrderId: orderId
+            })
+        );
+        await Promise.all(promises);
+    } catch (error) {
+        console.error("Error using shein cards:", error);
+        throw error;
     }
 }

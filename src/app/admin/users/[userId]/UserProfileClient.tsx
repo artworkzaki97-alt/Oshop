@@ -2,10 +2,11 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Order, Transaction, User, OrderStatus } from '@/lib/types';
+import { Order, Transaction, User, OrderStatus, Deposit } from '@/lib/types';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     User as UserIcon,
     Phone,
@@ -19,7 +20,8 @@ import {
     Calendar,
     ArrowUpRight,
     ArrowDownLeft,
-    Wallet
+    Wallet,
+    Receipt
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -29,6 +31,7 @@ interface UserProfileClientProps {
     user: User;
     orders: Order[];
     transactions: Transaction[];
+    deposits: Deposit[];
     totalOrdersValue: number;
     totalOrdersCount: number;
     totalDebt: number;
@@ -68,6 +71,7 @@ export const UserProfileClient = ({
     user,
     orders,
     transactions,
+    deposits,
     totalOrdersValue,
     totalOrdersCount,
     totalDebt
@@ -196,110 +200,154 @@ export const UserProfileClient = ({
                 </motion.div>
             </div>
 
-            {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Tabs Section */}
+            <motion.div variants={itemVariant} className="mt-8">
+                <Tabs defaultValue="orders" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 mb-8">
+                        <TabsTrigger value="orders">الطلبات</TabsTrigger>
+                        <TabsTrigger value="transactions">المعاملات المالية</TabsTrigger>
+                        <TabsTrigger value="deposits">سجل العربون</TabsTrigger>
+                    </TabsList>
 
-                {/* Orders Section */}
-                <motion.div variants={itemVariant} className="lg:col-span-2">
-                    <GlassCard className="h-full">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold flex items-center gap-2">
-                                <ShoppingCart className="w-5 h-5 text-primary" />
-                                سجل الطلبات
-                            </h3>
-                            <span className="text-xs font-mono bg-black/5 dark:bg-white/5 px-2 py-1 rounded">
-                                {orders.length} طلب
-                            </span>
-                        </div>
+                    <TabsContent value="orders">
+                        <GlassCard className="h-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <ShoppingCart className="w-5 h-5 text-primary" />
+                                    سجل الطلبات
+                                </h3>
+                                <span className="text-xs font-mono bg-black/5 dark:bg-white/5 px-2 py-1 rounded">
+                                    {orders.length} طلب
+                                </span>
+                            </div>
 
-                        <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                            {orders.length > 0 ? (
-                                orders.map((order) => {
-                                    const statusStyle = statusConfig[order.status] || { text: order.status, className: 'bg-gray-100 text-gray-500' };
-                                    return (
-                                        <div key={order.id} className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-primary/20 transition-all duration-300">
-                                            <div className="flex items-center gap-4 mb-3 sm:mb-0">
-                                                <div className={`w-2 h-12 rounded-full ${order.remainingAmount > 0 ? 'bg-red-500' : 'bg-green-500'}`} />
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-bold text-foreground">#{order.invoiceNumber}</span>
-                                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusStyle.className}`}>
-                                                            {statusStyle.text}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                                        <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(order.operationDate).toLocaleDateString('ar-LY')}</span>
+                            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                {orders.length > 0 ? (
+                                    orders.map((order) => {
+                                        const statusStyle = statusConfig[order.status] || { text: order.status, className: 'bg-gray-100 text-gray-500' };
+                                        return (
+                                            <div key={order.id} className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 border border-transparent hover:border-primary/20 transition-all duration-300">
+                                                <div className="flex items-center gap-4 mb-3 sm:mb-0">
+                                                    <div className={`w-2 h-12 rounded-full ${order.remainingAmount > 0 ? 'bg-red-500' : 'bg-green-500'}`} />
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="font-bold text-foreground">#{order.invoiceNumber}</span>
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusStyle.className}`}>
+                                                                {statusStyle.text}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                                            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(order.operationDate).toLocaleDateString('ar-LY')}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                                                <div className="text-left">
-                                                    <p className="text-xs text-muted-foreground">المتبقي</p>
-                                                    <p className={`font-bold ${order.remainingAmount > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                                        {order.remainingAmount.toLocaleString()} <span className="text-[10px]">د.ل</span>
-                                                    </p>
+                                                <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
+                                                    <div className="text-left">
+                                                        <p className="text-xs text-muted-foreground">المتبقي</p>
+                                                        <p className={`font-bold ${order.remainingAmount > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                                            {order.remainingAmount.toLocaleString()} <span className="text-[10px]">د.ل</span>
+                                                        </p>
+                                                    </div>
+
+                                                    <Link href={`/admin/orders/${order.id}`}>
+                                                        <Button size="icon" variant="ghost" className="rounded-full hover:bg-primary/20 hover:text-primary">
+                                                            <ArrowUpRight className="w-5 h-5" />
+                                                        </Button>
+                                                    </Link>
                                                 </div>
-
-                                                <Link href={`/admin/orders/${order.id}`}>
-                                                    <Button size="icon" variant="ghost" className="rounded-full hover:bg-primary/20 hover:text-primary">
-                                                        <ArrowUpRight className="w-5 h-5" />
-                                                    </Button>
-                                                </Link>
                                             </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <div className="w-16 h-16 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <ShoppingCart className="w-8 h-8 text-muted-foreground/50" />
                                         </div>
-                                    );
-                                })
-                            ) : (
-                                <div className="text-center py-10">
-                                    <div className="w-16 h-16 bg-black/5 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <ShoppingCart className="w-8 h-8 text-muted-foreground/50" />
+                                        <p className="text-muted-foreground">لا توجد طلبات مسجلة</p>
                                     </div>
-                                    <p className="text-muted-foreground">لا توجد طلبات مسجلة</p>
-                                </div>
-                            )}
-                        </div>
-                    </GlassCard>
-                </motion.div>
+                                )}
+                            </div>
+                        </GlassCard>
+                    </TabsContent>
 
-                {/* Transactions Section */}
-                <motion.div variants={itemVariant}>
-                    <GlassCard className="h-full">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-xl font-bold flex items-center gap-2">
-                                <Wallet className="w-5 h-5 text-primary" />
-                                المعاملات المالية
-                            </h3>
-                        </div>
+                    <TabsContent value="transactions">
+                        <GlassCard className="h-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <Wallet className="w-5 h-5 text-primary" />
+                                    المعاملات المالية
+                                </h3>
+                            </div>
 
-                        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                            {transactions.length > 0 ? (
-                                transactions.map((tx) => (
-                                    <div key={tx.id} className="relative pl-4 border-r-2 border-black/5 dark:border-white/5 last:border-0 pb-6 last:pb-0">
-                                        <div className={`absolute -right-[5px] top-0 w-2.5 h-2.5 rounded-full ${tx.type === 'payment' ? 'bg-green-500 ring-4 ring-green-500/20' : 'bg-red-500 ring-4 ring-red-500/20'}`} />
+                            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                {transactions.length > 0 ? (
+                                    transactions.map((tx) => (
+                                        <div key={tx.id} className="relative pl-4 border-r-2 border-black/5 dark:border-white/5 last:border-0 pb-6 last:pb-0">
+                                            <div className={`absolute -right-[5px] top-0 w-2.5 h-2.5 rounded-full ${tx.type === 'payment' ? 'bg-green-500 ring-4 ring-green-500/20' : 'bg-red-500 ring-4 ring-red-500/20'}`} />
 
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-sm font-bold text-foreground">{tx.type === 'payment' ? 'دفعة مستلمة' : 'دين جديد'}</span>
-                                            <span className={`font-mono font-bold text-sm ${tx.type === 'payment' ? 'text-green-500' : 'text-red-500'}`}>
-                                                {tx.type === 'payment' ? '+' : '-'}{tx.amount.toLocaleString()}
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="text-sm font-bold text-foreground">{tx.type === 'payment' ? 'دفعة مستلمة' : 'دين جديد'}</span>
+                                                <span className={`font-mono font-bold text-sm ${tx.type === 'payment' ? 'text-green-500' : 'text-red-500'}`}>
+                                                    {tx.type === 'payment' ? '+' : '-'}{tx.amount.toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mb-1 line-clamp-2">{tx.description}</p>
+                                            <span className="text-[10px] text-muted-foreground/70 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                                                {new Date(tx.date).toLocaleDateString('ar-LY')}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mb-1 line-clamp-2">{tx.description}</p>
-                                        <span className="text-[10px] text-muted-foreground/70 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
-                                            {new Date(tx.date).toLocaleDateString('ar-LY')}
-                                        </span>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <p className="text-muted-foreground">لا توجد معاملات</p>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="text-center py-10">
-                                    <p className="text-muted-foreground">لا توجد معاملات</p>
-                                </div>
-                            )}
-                        </div>
-                    </GlassCard>
-                </motion.div>
+                                )}
+                            </div>
+                        </GlassCard>
+                    </TabsContent>
 
-            </div>
+                    <TabsContent value="deposits">
+                        <GlassCard className="h-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <Receipt className="w-5 h-5 text-primary" />
+                                    سجل العربون
+                                </h3>
+                                <span className="text-xs font-mono bg-black/5 dark:bg-white/5 px-2 py-1 rounded">
+                                    {deposits.length} عملية
+                                </span>
+                            </div>
+
+                            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                {deposits.length > 0 ? (
+                                    deposits.map((deposit) => (
+                                        <div key={deposit.id} className="flex items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 mb-3">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-500">
+                                                    <Receipt className="w-5 h-5" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-sm">إيصال #{deposit.receiptNumber}</h4>
+                                                    <p className="text-xs text-muted-foreground">{deposit.description}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="font-bold text-green-500">{deposit.amount.toLocaleString()} د.ل</p>
+                                                <p className="text-[10px] text-muted-foreground">{new Date(deposit.date).toLocaleDateString('ar-LY')}</p>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <p className="text-muted-foreground">لا يوجد سجل عربون</p>
+                                    </div>
+                                )}
+                            </div>
+                        </GlassCard>
+                    </TabsContent>
+                </Tabs>
+            </motion.div>
         </motion.div>
     );
 };

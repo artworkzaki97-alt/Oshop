@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DollarSign, CreditCard, MoreHorizontal, Edit, Trash2, TrendingUp, RefreshCcw, TrendingDown, Calendar as CalendarIcon, Loader2, Search, ArrowUpDown } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
-import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses, getCreditors } from '@/lib/actions';
-import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor } from '@/lib/types';
+import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses, getCreditors, getManagers } from '@/lib/actions';
+import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor, Manager } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
     DropdownMenu,
@@ -42,6 +42,7 @@ import { ar } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const statusConfig: Record<string, { text: string; className: string }> = {
     pending: { text: 'قيد التجهيز', className: 'bg-yellow-100 text-yellow-700' },
@@ -80,6 +81,8 @@ const FinancialReportsPage = () => {
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+    const [managers, setManagers] = useState<Manager[]>([]);
+    const [selectedManagerId, setSelectedManagerId] = useState<string>('all');
 
     const [filterType, setFilterType] = useState<string>('monthly');
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
@@ -88,18 +91,20 @@ const FinancialReportsPage = () => {
 
     const fetchData = async () => {
         setIsLoading(true);
-        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses, fetchedCreditors] = await Promise.all([
+        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses, fetchedCreditors, fetchedManagers] = await Promise.all([
             getTransactions(),
             getOrders(),
             getAppSettings(),
             getExpenses(),
             getCreditors(),
+            getManagers(),
         ]);
         setAllTransactions(fetchedTransactions);
         setAllOrders(fetchedOrders);
         setSettings(fetchedSettings);
         setAllExpenses(fetchedExpenses);
         setAllCreditors(fetchedCreditors);
+        setManagers(fetchedManagers);
         setIsLoading(false);
     }
 
@@ -143,6 +148,13 @@ const FinancialReportsPage = () => {
         let dateFilteredTransactions = regularTransactions;
         let dateFilteredExpenses = allExpenses;
         let dateFilteredOrders = regularOrders;
+
+        // Filter by Manager
+        if (selectedManagerId !== 'all') {
+            dateFilteredTransactions = dateFilteredTransactions.filter(t => t.managerId === selectedManagerId);
+            dateFilteredExpenses = dateFilteredExpenses.filter(e => e.managerId === selectedManagerId);
+            dateFilteredOrders = dateFilteredOrders.filter(o => o.managerId === selectedManagerId);
+        }
 
         if (startDate && endDate) {
             dateFilteredTransactions = regularTransactions.filter(t => {
@@ -364,6 +376,17 @@ const FinancialReportsPage = () => {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
                 <h1 className="text-2xl font-bold">التقارير المالية</h1>
                 <div className="flex items-center gap-2">
+                    <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="تصفية حسب الموظف" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">كل الموظفين</SelectItem>
+                            {managers.map(manager => (
+                                <SelectItem key={manager.id} value={manager.id}>{manager.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Button onClick={() => setIsResetDialogOpen(true)} variant="destructive" className="gap-2">
                         <RefreshCcw className="w-4 h-4" />
                         تصفير

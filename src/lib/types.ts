@@ -52,8 +52,12 @@ export interface Order {
   sellingPriceLYD: number;
   remainingAmount: number;
   status: OrderStatus;
+  images?: string[];
+  cartUrl?: string;
+  siteId?: string;
   productLinks: string;
   exchangeRate: number; // Exchange rate at the time of order creation (snapshot)
+  managerId?: string; // ID of the manager who created/edited the order
   // Optional detailed fields from form
   purchasePriceUSD?: number;
   downPaymentLYD?: number; // Deposit (Arbun)
@@ -100,6 +104,7 @@ export interface Transaction {
   status: OrderStatus | 'paid';
   amount: number;
   description: string;
+  managerId?: string;
 }
 
 export interface SubOrder {
@@ -187,6 +192,7 @@ export interface Expense {
   description: string;
   amount: number;
   date: string; // ISO String
+  managerId?: string;
 }
 
 export type DepositStatus = 'pending' | 'collected' | 'cancelled';
@@ -196,6 +202,7 @@ export interface Deposit {
   receiptNumber: string;
   customerName: string;
   customerPhone: string;
+  userId?: string;
   amount: number;
   date: string; // ISO String
   description: string;
@@ -269,4 +276,24 @@ export interface Product {
   category?: string;
   createdAt?: string; // ISO String
   updatedAt?: string; // ISO String
+}
+
+export interface GlobalSite {
+  id: string;
+  name: string;
+  url: string;
+  logo?: string;
+}
+
+export interface SheinCard {
+  id: string;
+  code: string;
+  value: number;
+  currency: 'USD'; // Usually USD for Shein cards
+  status: 'available' | 'used' | 'expired';
+  purchaseDate: string; // ISO
+  expiryDate?: string; // ISO
+  usedAt?: string; // ISO
+  usedForOrderId?: string;
+  notes?: string;
 }

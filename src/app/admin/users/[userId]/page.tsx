@@ -2,7 +2,7 @@
 // src/app/admin/users/[userId]/page.tsx
 import React, { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { getUserById, getOrdersByUserId, getTransactionsByUserId } from '@/lib/actions';
+import { getUserById, getOrdersByUserId, getTransactionsByUserId, getDepositsByUserId } from '@/lib/actions';
 import { UserProfileClient } from './UserProfileClient';
 import { Loader2 } from 'lucide-react';
 
@@ -15,12 +15,15 @@ const UserProfilePage = async ({ params }: { params: { userId: string } }) => {
         notFound();
     }
 
-    const [orders, transactions] = await Promise.all([
+    const [orders, transactions, deposits] = await Promise.all([
         getOrdersByUserId(userId),
         getTransactionsByUserId(userId),
+        getDepositsByUserId(userId),
     ]);
 
     const totalOrdersValue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.sellingPriceLYD, 0);
+    // User debt is stored in user object efficiently, but we could recalculate if needed.
+    // user.debt is the source of truth for now.
     const totalDebt = user.debt;
     const totalOrdersCount = user.orderCount;
 
@@ -29,6 +32,7 @@ const UserProfilePage = async ({ params }: { params: { userId: string } }) => {
             user={user}
             orders={orders}
             transactions={transactions}
+            deposits={deposits}
             totalOrdersValue={totalOrdersValue}
             totalOrdersCount={totalOrdersCount}
             totalDebt={totalDebt}

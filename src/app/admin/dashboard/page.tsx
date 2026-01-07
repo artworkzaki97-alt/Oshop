@@ -227,7 +227,9 @@ const AdminDashboardPage = () => {
         fetchManagerData();
     }, []);
 
-    const hasReportsAccess = manager?.permissions?.includes('reports') || manager?.username === 'admin@tamweelsys.app';
+    const hasReportsAccess = manager?.permissions?.includes('financial_dashboard') ||
+        manager?.permissions?.includes('reports') ||
+        manager?.username === 'admin@tamweelsys.app';
 
     return (
         <motion.div
