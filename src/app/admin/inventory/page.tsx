@@ -21,13 +21,21 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
+import {
     Plus,
     Search,
     Edit,
     Trash2,
     Package,
     AlertTriangle,
-    Loader2
+    Loader2,
+    DollarSign,
+    Boxes
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Product } from '@/lib/types';
@@ -126,21 +134,61 @@ export default function InventoryPage() {
         (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    // Summary Calculations
+    const totalInventoryValue = products.reduce((sum, p) => sum + (p.quantity * p.costPriceUSD), 0);
+    const totalProducts = products.length;
+    const lowStockCount = products.filter(p => p.quantity <= p.minStockLevel).length;
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-6" dir="rtl">
+            <h1 className="text-2xl font-bold">إدارة المخزون (الخزينة)</h1>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">إجمالي قيمة المخزون</CardTitle>
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{totalInventoryValue.toLocaleString()} $</div>
+                        <p className="text-xs text-muted-foreground">التكلفة الإجمالية للمنتجات المتوفرة</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">عدد المنتجات</CardTitle>
+                        <Boxes className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{totalProducts}</div>
+                        <p className="text-xs text-muted-foreground">صنف مسجل في النظام</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">تنبيهات المخزون</CardTitle>
+                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-yellow-600">{lowStockCount}</div>
+                        <p className="text-xs text-muted-foreground">منتجات أوشكت على النفاذ</p>
+                    </CardContent>
+                </Card>
+            </div>
+
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="بحث باسم المنتج أو الكود (SKU)..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
+                        className="pr-10"
                     />
                 </div>
                 <Button onClick={() => openDialog(null)} className="w-full sm:w-auto gap-2">
                     <Plus className="h-4 w-4" />
-                    منتج جديد
+                    إضافة صنف جديد
                 </Button>
             </div>
 
@@ -150,8 +198,9 @@ export default function InventoryPage() {
                         <TableRow>
                             <TableHead className="text-right">المنتج</TableHead>
                             <TableHead className="text-right">SKU</TableHead>
-                            <TableHead className="text-center">الكمية</TableHead>
-                            <TableHead className="text-center">التكلفة ($)</TableHead>
+                            <TableHead className="text-center">الكمية المملوكة</TableHead>
+                            <TableHead className="text-center">متوسط التكلفة ($)</TableHead>
+                            <TableHead className="text-center">إجمالي التكلفة ($)</TableHead>
                             <TableHead className="text-center">سعر البيع</TableHead>
                             <TableHead className="text-center">الحالة</TableHead>
                             <TableHead className="text-left">إجراءات</TableHead>
@@ -160,7 +209,7 @@ export default function InventoryPage() {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center">
+                                <TableCell colSpan={8} className="h-24 text-center">
                                     <div className="flex justify-center items-center gap-2">
                                         <Loader2 className="h-5 w-5 animate-spin" />
                                         جري التحميل...
@@ -169,7 +218,7 @@ export default function InventoryPage() {
                             </TableRow>
                         ) : filteredProducts.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                     لا توجد منتجات مسجلة.
                                 </TableCell>
                             </TableRow>
@@ -189,6 +238,7 @@ export default function InventoryPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-center">{product.costPriceUSD.toFixed(2)} $</TableCell>
+                                    <TableCell className="text-center font-bold text-blue-600">{(product.quantity * product.costPriceUSD).toFixed(2)} $</TableCell>
                                     <TableCell className="text-center">
                                         <div className="flex flex-col text-xs">
                                             <span>{product.sellingPriceLYD.toFixed(2)} د.ل</span>
