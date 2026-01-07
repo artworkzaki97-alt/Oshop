@@ -1,5 +1,6 @@
 
-import { supabase } from './supabase';
+import 'server-only';
+import { supabaseAdmin as supabase } from './supabase-admin';
 
 // Helper to handle increment/arrayUnion logic locally before sending to Supabase
 // Since we are moving from NoSQL-style JSON to Postgres, and we generated columns for fields,
