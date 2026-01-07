@@ -3,31 +3,31 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoreHorizontal, PlusCircle, Trash2, Loader2, HandCoins, CheckCircle, Clock, XCircle, Search, Calendar as CalendarIcon, Edit, Filter, X, Printer } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from "@/components/ui/use-toast";
@@ -80,7 +80,7 @@ const AdminDepositsPage = () => {
             setIsLoading(false);
         }
     }, [toast]);
-    
+
     useEffect(() => {
         fetchInitialData();
     }, [fetchInitialData]);
@@ -105,19 +105,19 @@ const AdminDepositsPage = () => {
                 endDate = endOfMonth(now);
                 break;
             case 'custom':
-                if(dateRange?.from) startDate = startOfDay(dateRange.from);
-                if(dateRange?.to) endDate = endOfDay(dateRange.to);
-                else if(dateRange?.from) endDate = endOfDay(dateRange.from);
+                if (dateRange?.from) startDate = startOfDay(dateRange.from);
+                if (dateRange?.to) endDate = endOfDay(dateRange.to);
+                else if (dateRange?.from) endDate = endOfDay(dateRange.from);
                 break;
         }
-        
+
         if (startDate && endDate) {
             dateFilteredDeposits = allDeposits.filter(d => {
                 const dDate = parseISO(d.date);
                 return dDate >= startDate! && dDate <= endDate!;
             });
         }
-        
+
         if (!searchQuery) return dateFilteredDeposits;
 
         return dateFilteredDeposits.filter(deposit => {
@@ -165,11 +165,11 @@ const AdminDepositsPage = () => {
                 fetchInitialData();
                 setIsDialogOpen(false);
             } else {
-                 toast({ title: "حدث خطأ", description: "فشل تحديث العربون.", variant: 'destructive' });
+                toast({ title: "حدث خطأ", description: "فشل تحديث العربون.", variant: 'destructive' });
             }
         } else {
             // Add logic
-             const newDepositData: Omit<Deposit, 'id' | 'receiptNumber' | 'collectedDate'> = {
+            const newDepositData: Omit<Deposit, 'id' | 'receiptNumber' | 'collectedDate'> = {
                 ...(depositData as any),
                 date: new Date().toISOString(),
                 status: 'pending',
@@ -199,19 +199,19 @@ const AdminDepositsPage = () => {
         setIsDeleteConfirmOpen(false);
         setCurrentDeposit(null);
     };
-    
+
     const handleFilterChange = (type: string) => {
         setFilterType(type);
         if (type !== 'custom') {
             setDateRange(undefined);
         }
     }
-    
+
     const handleDateRangeSelect = (range: DateRange | undefined) => {
         setDateRange(range);
         setFilterType('custom');
     }
-    
+
     const handlePrint = (depositId: string) => {
         const printUrl = `/admin/deposits/print/${depositId}`;
         window.open(printUrl, '_blank', 'height=842,width=595,resizable=yes,scrollbars=yes');
@@ -219,14 +219,14 @@ const AdminDepositsPage = () => {
 
     const getFilterLabel = () => {
         switch (filterType) {
-            case 'daily': return `اليوم: ${format(new Date(), 'd MMMM yyyy', {locale: ar})}`;
+            case 'daily': return `اليوم: ${format(new Date(), 'd MMMM yyyy', { locale: ar })}`;
             case 'weekly': return 'هذا الأسبوع';
             case 'monthly': return 'هذا الشهر';
-            case 'custom': 
+            case 'custom':
                 if (dateRange?.from && dateRange?.to) {
-                    return `${format(dateRange.from, 'd MMM', {locale: ar})} - ${format(dateRange.to, 'd MMM yyyy', {locale: ar})}`;
+                    return `${format(dateRange.from, 'd MMM', { locale: ar })} - ${format(dateRange.to, 'd MMM yyyy', { locale: ar })}`;
                 }
-                if(dateRange?.from) return `تاريخ: ${format(dateRange.from, 'd MMMM yyyy', {locale: ar})}`;
+                if (dateRange?.from) return `تاريخ: ${format(dateRange.from, 'd MMMM yyyy', { locale: ar })}`;
                 return 'فترة مخصصة';
             default: return 'عرض كل السجلات';
         }
@@ -238,12 +238,12 @@ const AdminDepositsPage = () => {
         <div className="p-4 sm:p-6" dir="rtl">
             <div className="flex items-center justify-between mb-6 print:hidden">
                 <h1 className="text-2xl font-bold">سجل العربون</h1>
-                 <Button size="sm" className="gap-1" onClick={() => openDialog()}>
+                <Button size="sm" className="gap-1" onClick={() => openDialog()}>
                     <PlusCircle className="h-4 w-4" />
                     إضافة عربون
                 </Button>
             </div>
-            
+
             <Card className="mb-6 print-section">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <div>
@@ -262,12 +262,12 @@ const AdminDepositsPage = () => {
                 <CardHeader className="print:hidden">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                           <CardTitle>قائمة العربون</CardTitle>
-                           <CardDescription>هنا يمكنك عرض وإدارة جميع سجلات العربون.</CardDescription>
+                            <CardTitle>قائمة العربون</CardTitle>
+                            <CardDescription>هنا يمكنك عرض وإدارة جميع سجلات العربون.</CardDescription>
                         </div>
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                             <div className="relative w-full sm:w-72">
-                                <Input 
+                            <div className="relative w-full sm:w-72">
+                                <Input
                                     placeholder="ابحث بالاسم، الهاتف، أو الرقم..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -278,42 +278,42 @@ const AdminDepositsPage = () => {
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-4 print:hidden">
-                        <Filter className="w-5 h-5 text-muted-foreground"/>
+                        <Filter className="w-5 h-5 text-muted-foreground" />
                         <Button variant={filterType === 'all' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('all')}>الكل</Button>
                         <Button variant={filterType === 'daily' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('daily')}>اليوم</Button>
                         <Button variant={filterType === 'weekly' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('weekly')}>أسبوعي</Button>
                         <Button variant={filterType === 'monthly' ? 'default' : 'outline'} size="sm" onClick={() => handleFilterChange('monthly')}>شهري</Button>
                         <Popover>
                             <PopoverTrigger asChild>
-                              <Button
-                                id="date"
-                                variant={"outline"}
-                                size="sm"
-                                className={cn("w-[240px] justify-start text-right font-normal", filterType === 'custom' && "border-primary")}
-                              >
-                                <CalendarIcon className="ml-2 h-4 w-4" />
-                                {dateRange?.from ? (
-                                  dateRange.to ? (
-                                    <>{format(dateRange.from, "d MMM", {locale: ar})} - {format(dateRange.to, "d MMM yyyy", {locale: ar})}</>
-                                  ) : (format(dateRange.from, "d MMMM yyyy", {locale: ar}))
-                                ) : ( <span>فترة مخصصة</span> )}
-                              </Button>
+                                <Button
+                                    id="date"
+                                    variant={"outline"}
+                                    size="sm"
+                                    className={cn("w-[240px] justify-start text-right font-normal", filterType === 'custom' && "border-primary")}
+                                >
+                                    <CalendarIcon className="ml-2 h-4 w-4" />
+                                    {dateRange?.from ? (
+                                        dateRange.to ? (
+                                            <>{format(dateRange.from, "d MMM", { locale: ar })} - {format(dateRange.to, "d MMM yyyy", { locale: ar })}</>
+                                        ) : (format(dateRange.from, "d MMMM yyyy", { locale: ar }))
+                                    ) : (<span>فترة مخصصة</span>)}
+                                </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                initialFocus
-                                mode="range"
-                                defaultMonth={dateRange?.from}
-                                selected={dateRange}
-                                onSelect={handleDateRangeSelect}
-                                numberOfMonths={2}
-                                locale={ar}
-                              />
+                                <Calendar
+                                    initialFocus
+                                    mode="range"
+                                    defaultMonth={dateRange?.from}
+                                    selected={dateRange}
+                                    onSelect={handleDateRangeSelect}
+                                    numberOfMonths={2}
+                                    locale={ar}
+                                />
                             </PopoverContent>
                         </Popover>
-                         {dateRange && (
+                        {dateRange && (
                             <Button variant="ghost" size="icon" onClick={() => { setDateRange(undefined); setFilterType('all'); }}>
-                                <X className="w-4 h-4"/>
+                                <X className="w-4 h-4" />
                             </Button>
                         )}
                     </div>
@@ -357,7 +357,10 @@ const AdminDepositsPage = () => {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
-                                                <DropdownMenuItem onSelect={() => openDialog(deposit)}>
+                                                <DropdownMenuItem
+                                                    onSelect={() => openDialog(deposit)}
+                                                    disabled={deposit.status === 'collected'}
+                                                >
                                                     <Edit className="ml-2 h-4 w-4" />
                                                     تعديل
                                                 </DropdownMenuItem>
@@ -365,7 +368,11 @@ const AdminDepositsPage = () => {
                                                     <Printer className="ml-2 h-4 w-4" />
                                                     طباعة الإيصال
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem onSelect={() => openDeleteConfirm(deposit)} className="text-destructive focus:bg-destructive/30 focus:text-destructive-foreground">
+                                                <DropdownMenuItem
+                                                    onSelect={() => openDeleteConfirm(deposit)}
+                                                    className="text-destructive focus:bg-destructive/30 focus:text-destructive-foreground"
+                                                    disabled={deposit.status === 'collected'}
+                                                >
                                                     <Trash2 className="ml-2 h-4 w-4" />
                                                     حذف
                                                 </DropdownMenuItem>
@@ -404,7 +411,7 @@ const AdminDepositsPage = () => {
                                 <Label htmlFor="amount">المبلغ (د.ل)</Label>
                                 <Input id="amount" name="amount" type="number" step="0.01" dir="ltr" defaultValue={currentDeposit?.amount} required />
                             </div>
-                             <div className="space-y-2">
+                            <div className="space-y-2">
                                 <Label htmlFor="description">الوصف</Label>
                                 <Textarea id="description" name="description" placeholder="وصف موجز لسبب العربون..." defaultValue={currentDeposit?.description} />
                             </div>
@@ -430,7 +437,7 @@ const AdminDepositsPage = () => {
                     </form>
                 </DialogContent>
             </Dialog>
-            
+
             {/* Delete Confirmation Dialog */}
             <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
                 <DialogContent dir='rtl'>
@@ -452,4 +459,3 @@ const AdminDepositsPage = () => {
 
 export default AdminDepositsPage;
 
-    

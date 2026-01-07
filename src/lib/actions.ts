@@ -558,6 +558,23 @@ export async function getOrdersByIds(ids: string[]): Promise<Order[]> {
     }
 }
 
+export async function bulkAssignRepresentativeToOrder(orderIds: string[], representativeId: string, representativeName: string): Promise<boolean> {
+    try {
+        const batchUpdates = orderIds.map(async (id) => {
+            const orderRef = doc(db, ORDERS_COLLECTION, id);
+            await updateDoc(orderRef, {
+                representativeId,
+                representativeName,
+                status: 'out_for_delivery'
+            });
+        });
+        await Promise.all(batchUpdates);
+        return true;
+    } catch (error) {
+        console.error("Error bulk assigning representative:", error);
+        return false;
+    }
+}
 export async function getOrderById(orderId: string): Promise<Order | null> {
     try {
         const orderRef = doc(db, ORDERS_COLLECTION, orderId);

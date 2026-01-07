@@ -38,7 +38,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/components/ui/use-toast";
 import { Order, OrderStatus, Representative, AppSettings } from '@/lib/types';
-import { getOrders, updateOrder, deleteOrder, addTransaction, getRepresentatives, assignRepresentativeToOrder, unassignRepresentativeFromOrder, bulkDeleteOrders, bulkUpdateOrdersStatus, getAppSettings, getSystemSettings, setCustomerWeightDetails } from '@/lib/actions';
+import { getOrders, updateOrder, deleteOrder, addTransaction, getRepresentatives, assignRepresentativeToOrder, unassignRepresentativeFromOrder, bulkDeleteOrders, bulkUpdateOrdersStatus, getAppSettings, getSystemSettings, setCustomerWeightDetails, bulkAssignRepresentativeToOrder } from '@/lib/actions';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -377,7 +377,14 @@ const AdminOrdersPage = () => {
     const idsToUpdate = Object.keys(selectedRows).filter(id => selectedRows[id]);
     if (idsToUpdate.length === 0) return;
     // This is not implemented in actions.ts yet
-    toast({ title: "قيد التطوير", description: "الإسناد الجماعي للمندوبين قيد التطوير.", variant: "default" });
+    const success = await bulkAssignRepresentativeToOrder(idsToUpdate, rep.id, rep.name);
+    if (success) {
+      toast({ title: `تم إسناد ${idsToUpdate.length} طلب للموظف ${rep.name}` });
+      fetchData();
+      setSelectedRows({});
+    } else {
+      toast({ title: "خطأ", description: "فشل تعيين المندوب.", variant: "destructive" });
+    }
   }
 
   const handleBulkPrint = () => {
