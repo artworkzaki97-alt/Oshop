@@ -14,12 +14,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { Separator } from "@/components/ui/separator";
 
 // Helper to determine step progress based on status
-const getStepIndex = (status: OrderStatus): number => {
+const getStepIndex = (status: string): number => {
     switch (status) {
         case 'pending': return 0;
         case 'processed': return 1;
         case 'ready': return 1;
         case 'shipped': return 2;
+        case 'arrived_misrata': return 3;
         case 'arrived_dubai': return 3;
         case 'arrived_benghazi': return 3;
         case 'arrived_tobruk': return 3;

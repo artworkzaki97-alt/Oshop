@@ -35,9 +35,7 @@ export type OrderStatus =
   | 'processed'
   | 'ready'
   | 'shipped'
-  | 'arrived_dubai'
-  | 'arrived_benghazi'
-  | 'arrived_tobruk'
+  | 'arrived_misrata' // Replaces old city specific arrivals
   | 'out_for_delivery'
   | 'delivered'
   | 'cancelled'
@@ -55,22 +53,29 @@ export interface Order {
   remainingAmount: number;
   status: OrderStatus;
   productLinks: string;
-  exchangeRate: number; // Exchange rate at the time of order creation
+  exchangeRate: number; // Exchange rate at the time of order creation (snapshot)
   // Optional detailed fields from form
   purchasePriceUSD?: number;
-  downPaymentLYD?: number;
-  weightKG?: number;
+  downPaymentLYD?: number; // Deposit (Arbun)
+  weightKG?: number; // Weight in KG
+
+  // Financial Snapshot Fields (calculated at the time of weight entry/update)
+  shippingCostUSD?: number; // Cost of shipping (e.g. 4.5 * weight)
+  shippingPriceUSD?: number; // Price of shipping to customer (e.g. 5.0 * weight)
+  localShippingPrice?: number; // Local shipping cost (delivery)
+  totalAmountLYD?: number; // Total amount in LYD including shipping
+
   pricePerKilo?: number;
   pricePerKiloCurrency?: 'LYD' | 'USD';
   customerWeightCost?: number;
   customerWeightCostCurrency?: 'LYD' | 'USD';
-  companyWeightCost?: number; // Total cost paid by company (kept for backward compatibility or if LYD is strictly needed)
-  companyWeightCostUSD?: number; // Total cost paid by company in USD
-  companyPricePerKilo?: number; // Cost per kilo for company (LYD - deprecated/optional)
-  companyPricePerKiloUSD?: number; // Cost per kilo for company in USD
-  customerPricePerKilo?: number; // Price per kilo for customer (LYD)
-  addedCostUSD?: number; // New field for additional costs in USD
-  addedCostNotes?: string; // Notes for the added cost
+  companyWeightCost?: number;
+  companyWeightCostUSD?: number;
+  companyPricePerKilo?: number;
+  companyPricePerKiloUSD?: number;
+  customerPricePerKilo?: number;
+  addedCostUSD?: number;
+  addedCostNotes?: string;
   store?: string;
   paymentMethod?: string;
   deliveryDate?: string | null; // ISO String
@@ -78,9 +83,9 @@ export interface Order {
   shippingCostLYD?: number;
   representativeId?: string | null;
   representativeName?: string | null;
-  customerAddress?: string; // Added for representative view
-  customerPhone?: string; // Added for representative view
-  collectedAmount?: number; // Amount collected by representative
+  customerAddress?: string;
+  customerPhone?: string;
+  collectedAmount?: number;
   customerWeightCostUSD?: number;
 }
 
@@ -168,6 +173,13 @@ export interface AppSettings {
   exchangeRate: number;
   pricePerKiloLYD: number;
   pricePerKiloUSD: number;
+}
+
+export interface SystemSettings {
+  id: string; // Singleton ID usually
+  exchangeRate: number;
+  shippingCostUSD: number; // Cost for the company (e.g. 4.5)
+  shippingPriceUSD: number; // Price for the customer (e.g. 5.0)
 }
 
 export interface Expense {

@@ -38,7 +38,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from "@/components/ui/use-toast";
 import { Order, OrderStatus, Representative, AppSettings } from '@/lib/types';
-import { getOrders, updateOrder, deleteOrder, addTransaction, getRepresentatives, assignRepresentativeToOrder, unassignRepresentativeFromOrder, bulkDeleteOrders, bulkUpdateOrdersStatus, getAppSettings, setCustomerWeightDetails } from '@/lib/actions';
+import { getOrders, updateOrder, deleteOrder, addTransaction, getRepresentatives, assignRepresentativeToOrder, unassignRepresentativeFromOrder, bulkDeleteOrders, bulkUpdateOrdersStatus, getAppSettings, getSystemSettings, setCustomerWeightDetails } from '@/lib/actions';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -50,19 +50,21 @@ import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 
 
-const statusConfig: { [key in OrderStatus]: { text: string; icon: React.ReactNode; className: string } } = {
+const statusConfig: Record<string, { text: string; icon: React.ReactNode; className: string }> = {
   pending: { text: 'قيد التجهيز', icon: <Clock className="w-4 h-4" />, className: 'bg-yellow-100 text-yellow-700' },
   processed: { text: 'تم التنفيذ', icon: <CheckCircle className="w-4 h-4" />, className: 'bg-cyan-100 text-cyan-700' },
   ready: { text: 'تم التجهيز', icon: <Package className="w-4 h-4" />, className: 'bg-indigo-100 text-indigo-700' },
   shipped: { text: 'تم الشحن', icon: <Truck className="w-4 h-4" />, className: 'bg-blue-100 text-blue-700' },
-  arrived_dubai: { text: 'وصلت إلى دبي', icon: <Plane className="w-4 h-4" />, className: 'bg-orange-100 text-orange-700' },
-  arrived_benghazi: { text: 'وصلت إلى بنغازي', icon: <Building className="w-4 h-4" />, className: 'bg-teal-100 text-teal-700' },
-  arrived_tobruk: { text: 'وصلت إلى طبرق', icon: <Building className="w-4 h-4" />, className: 'bg-purple-100 text-purple-700' },
+  arrived_misrata: { text: 'وصلت إلى مصراتة', icon: <Building className="w-4 h-4" />, className: 'bg-teal-100 text-teal-700' },
   out_for_delivery: { text: 'مع المندوب', icon: <MapPin className="w-4 h-4" />, className: 'bg-lime-100 text-lime-700' },
   delivered: { text: 'تم التسليم', icon: <CheckCircle className="w-4 h-4" />, className: 'bg-green-100 text-green-700' },
   cancelled: { text: 'ملغي', icon: <Trash2 className="w-4 h-4" />, className: 'bg-red-100 text-red-700' },
   paid: { text: 'مدفوع', icon: <CheckCircle className="w-4 h-4" />, className: 'bg-green-100 text-green-700' },
   returned: { text: 'راجع', icon: <PackageX className="w-4 h-4" />, className: 'bg-red-100 text-red-700' },
+  // Legacy support fallback
+  arrived_dubai: { text: 'وصلت إلى دبي', icon: <Plane className="w-4 h-4" />, className: 'bg-orange-100 text-orange-700' },
+  arrived_benghazi: { text: 'وصلت إلى بنغازي', icon: <Building className="w-4 h-4" />, className: 'bg-teal-100 text-teal-700' },
+  arrived_tobruk: { text: 'وصلت إلى طبرق', icon: <Building className="w-4 h-4" />, className: 'bg-purple-100 text-purple-700' },
 };
 
 const allStatuses = Object.keys(statusConfig) as OrderStatus[];
@@ -90,6 +92,7 @@ const AdminOrdersPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [representatives, setRepresentatives] = useState<Representative[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [systemSettings, setSystemSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Dialog states
@@ -102,9 +105,11 @@ const AdminOrdersPage = () => {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentNotes, setPaymentNotes] = useState('');
+
+  // Weight Dialog State
   const [weightKg, setWeightKg] = useState(0);
-  const [companyKiloPriceUSD, setCompanyKiloPriceUSD] = useState(0); // Company cost per kilo in USD
-  const [customerKiloPrice, setCustomerKiloPrice] = useState(0); // Customer price per kilo in LYD
+  const [shippingCostUSD, setShippingCostUSD] = useState(0);
+  const [shippingPriceUSD, setShippingPriceUSD] = useState(0);
 
   // Filtering states
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,14 +125,16 @@ const AdminOrdersPage = () => {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [fetchedOrders, fetchedReps, fetchedSettings] = await Promise.all([
+      const [fetchedOrders, fetchedReps, fetchedSettings, fetchedSystemSettings] = await Promise.all([
         getOrders(),
         getRepresentatives(),
-        getAppSettings()
+        getAppSettings(),
+        getSystemSettings()
       ]);
       setOrders(fetchedOrders.sort((a, b) => new Date(b.operationDate).getTime() - new Date(a.operationDate).getTime()));
       setRepresentatives(fetchedReps);
       setSettings(fetchedSettings);
+      setSystemSettings(fetchedSystemSettings);
     } catch (error) {
       toast({ title: "خطأ", description: "فشل تحميل البيانات.", variant: "destructive" });
     } finally {
@@ -175,11 +182,16 @@ const AdminOrdersPage = () => {
     const profit = activeOrders.reduce((sum, order) => {
       const purchaseCostLYD = (order.purchasePriceUSD || 0) * (order.exchangeRate || settings?.exchangeRate || 1);
       const shippingCostLYD = order.shippingCostLYD || 0;
-      // Company weight cost stored in USD, convert to LYD using order's exchange rate (or current if not set)
-      const weightCostUSD = order.companyWeightCostUSD || 0;
+
+      // Dynamic Weight Cost Calculation
+      let weightCostUSD = order.companyWeightCostUSD || 0;
+      if (weightCostUSD === 0 && order.weightKG && systemSettings) {
+        // Fallback estimate if not explicitly saved
+        weightCostUSD = order.weightKG * systemSettings.shippingCostUSD;
+      }
       const weightCostLYD = weightCostUSD * (order.exchangeRate || settings?.exchangeRate || 1);
 
-      // Legacy support: if companyWeightCost (LYD) exists, add it too (though we deprecated it)
+      // Legacy support
       const legacyWeightCost = order.companyWeightCost || 0;
 
       const netProfit = order.sellingPriceLYD - purchaseCostLYD - shippingCostLYD - weightCostLYD - legacyWeightCost;
@@ -187,7 +199,7 @@ const AdminOrdersPage = () => {
     }, 0);
 
     return { totalValue: value, totalDebt: debt, totalProfit: profit };
-  }, [filteredOrders, settings]);
+  }, [filteredOrders, settings, systemSettings]);
 
 
   const handleSelectRow = (orderId: string, checked: boolean) => {
@@ -219,9 +231,9 @@ const AdminOrdersPage = () => {
 
   const openWeightDialog = (order: Order) => {
     setCurrentOrder(order);
-    setWeightKg(0);
-    setCompanyKiloPriceUSD(0);
-    setCustomerKiloPrice(0);
+    setWeightKg(order.weightKG || 0);
+    setShippingCostUSD(order.companyPricePerKiloUSD || systemSettings?.shippingCostUSD || 4.5);
+    setShippingPriceUSD(order.shippingPriceUSD || systemSettings?.shippingPriceUSD || 5.0);
     setIsWeightDialogOpen(true);
   };
 
@@ -253,10 +265,11 @@ const AdminOrdersPage = () => {
       amount: paymentAmount,
       description: description,
     });
+    setOrders(prev => prev.map(o => o.id === currentOrder.id ? { ...o, remainingAmount: o.remainingAmount - paymentAmount } : o));
     toast({ title: "تم تسجيل الدفعة بنجاح" });
     setIsPaymentDialogOpen(false);
     setCurrentOrder(null);
-    fetchData();
+    fetchData(); // Refetch
   };
 
   const handleDeleteOrder = async () => {
@@ -296,25 +309,30 @@ const AdminOrdersPage = () => {
   };
 
   const handleAddWeightCost = async () => {
-    if (!currentOrder || weightKg <= 0) return;
+    if (!currentOrder) return;
 
     try {
-      await setCustomerWeightDetails(currentOrder.id, weightKg, companyKiloPriceUSD, customerKiloPrice);
+      const exchangeRate = currentOrder.exchangeRate || settings?.exchangeRate || 1;
+      const customerPricePerKiloLYD = shippingPriceUSD * exchangeRate;
 
-      const customerTotalLYD = weightKg * customerKiloPrice;
-      const companyTotalUSD = weightKg * companyKiloPriceUSD;
+      await setCustomerWeightDetails(currentOrder.id, weightKg, shippingCostUSD, customerPricePerKiloLYD);
+
+      const totalShippingPriceUSD = weightKg * shippingPriceUSD;
+      const totalShippingPriceLYD = totalShippingPriceUSD * exchangeRate;
+      const totalCostUSD = weightKg * shippingCostUSD;
 
       setOrders(prev => prev.map(o => {
         if (o.id === currentOrder.id) {
+          const addedPrice = totalShippingPriceLYD - (o.customerWeightCost || 0);
           return {
             ...o,
-            sellingPriceLYD: o.sellingPriceLYD + customerTotalLYD,
-            remainingAmount: o.remainingAmount + customerTotalLYD,
-            customerWeightCost: (o.customerWeightCost || 0) + customerTotalLYD,
-            companyWeightCostUSD: (o.companyWeightCostUSD || 0) + companyTotalUSD,
+            sellingPriceLYD: o.sellingPriceLYD + addedPrice,
+            remainingAmount: o.remainingAmount + addedPrice,
+            customerWeightCost: totalShippingPriceLYD,
+            companyWeightCostUSD: totalCostUSD,
             weightKG: weightKg,
-            companyPricePerKiloUSD: companyKiloPriceUSD,
-            customerPricePerKilo: customerKiloPrice
+            companyPricePerKiloUSD: shippingCostUSD,
+            customerPricePerKilo: customerPricePerKiloLYD // Note: store LYD price for history
           };
         }
         return o;
@@ -360,6 +378,13 @@ const AdminOrdersPage = () => {
     if (idsToUpdate.length === 0) return;
     // This is not implemented in actions.ts yet
     toast({ title: "قيد التطوير", description: "الإسناد الجماعي للمندوبين قيد التطوير.", variant: "default" });
+  }
+
+  const handleBulkPrint = () => {
+    const idsToPrint = Object.keys(selectedRows).filter(id => selectedRows[id]);
+    if (idsToPrint.length === 0) return;
+    const url = `/admin/orders/print_bulk?ids=${idsToPrint.join(',')}`;
+    window.open(url, '_blank', 'height=842,width=595,resizable=yes,scrollbars=yes');
   }
 
   return (
@@ -520,6 +545,10 @@ const AdminOrdersPage = () => {
                         ))}
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
+                    <DropdownMenuItem onSelect={handleBulkPrint}>
+                      <Printer className="ml-2 h-4 w-4" />
+                      طباعة المحدد
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive" onSelect={() => setIsBulkDeleteOpen(true)}>حذف المحدد</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -751,27 +780,30 @@ const AdminOrdersPage = () => {
               <Input
                 id="company-price"
                 type="number"
-                value={companyKiloPriceUSD}
-                onChange={(e) => setCompanyKiloPriceUSD(parseFloat(e.target.value) || 0)}
+                value={shippingCostUSD}
+                onChange={(e) => setShippingCostUSD(parseFloat(e.target.value) || 0)}
                 dir="ltr"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="customer-price">سعر بيع الكيلو للزبون (د.ل)</Label>
+              <Label htmlFor="customer-price">سعر بيع الكيلو للزبون ($ دولار)</Label>
               <Input
                 id="customer-price"
                 type="number"
-                value={customerKiloPrice}
-                onChange={(e) => setCustomerKiloPrice(parseFloat(e.target.value) || 0)}
+                value={shippingPriceUSD}
+                onChange={(e) => setShippingPriceUSD(parseFloat(e.target.value) || 0)}
                 dir="ltr"
               />
             </div>
             <div className="bg-muted p-3 rounded-md text-sm space-y-1">
               {(() => {
-                const companyTotalUSD = weightKg * companyKiloPriceUSD;
+                const companyTotalUSD = weightKg * shippingCostUSD;
                 const exchangeRate = currentOrder?.exchangeRate || settings?.exchangeRate || 1;
                 const companyTotalLYD = companyTotalUSD * exchangeRate;
-                const customerTotalLYD = weightKg * customerKiloPrice;
+
+                const customerTotalUSD = weightKg * shippingPriceUSD;
+                const customerTotalLYD = customerTotalUSD * exchangeRate;
+
                 const profit = customerTotalLYD - companyTotalLYD;
 
                 return (
@@ -784,8 +816,12 @@ const AdminOrdersPage = () => {
                       <span>(سعر الصرف: {exchangeRate})</span>
                       <span>~ {companyTotalLYD.toFixed(2)} د.ل</span>
                     </div>
+                    <div className="flex justify-between border-t pt-1 mt-1">
+                      <span>سعر البيع (زبون - $):</span>
+                      <span className="font-bold">{customerTotalUSD.toFixed(2)} $</span>
+                    </div>
                     <div className="flex justify-between">
-                      <span>إجمالي البيع (زبون):</span>
+                      <span>إجمالي البيع (زبون - د.ل):</span>
                       <span className="font-bold text-green-600">{customerTotalLYD.toFixed(2)} د.ل</span>
                     </div>
                     <div className="flex justify-between pt-1 border-t mt-1">

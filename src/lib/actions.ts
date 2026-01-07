@@ -4,7 +4,7 @@
 
 import { dbAdapter } from "./db-adapter";
 import { where, increment, arrayUnion } from "./db-adapter";
-import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale } from "./types";
+import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale, SystemSettings } from "./types";
 
 // Map adapter methods to Firebase names for minimal code changes
 const db = dbAdapter;
@@ -162,23 +162,40 @@ export async function recalculateUserStats(userId: string): Promise<void> {
 
 
 // --- Settings Actions ---
+// --- Settings Actions ---
 export async function getAppSettings(): Promise<AppSettings> {
+    try {
+        const settings = await getSystemSettings();
+        return {
+            exchangeRate: settings.exchangeRate,
+            pricePerKiloLYD: 0, // Deprecated map
+            pricePerKiloUSD: settings.shippingPriceUSD, // Mapping new field to old for compatibility if needed
+        };
+    } catch (error) {
+        console.error("Error getting app settings:", error);
+        return { exchangeRate: 1, pricePerKiloLYD: 0, pricePerKiloUSD: 0 };
+    }
+}
+
+export async function getSystemSettings(): Promise<SystemSettings> {
     try {
         const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
         const docSnap = await getDoc(settingsRef);
 
-        const defaults: AppSettings = {
+        const defaults: SystemSettings = {
+            id: 'main',
             exchangeRate: 1,
-            pricePerKiloLYD: 0,
-            pricePerKiloUSD: 0,
+            shippingCostUSD: 4.5,
+            shippingPriceUSD: 5.0,
         };
 
         if (docSnap.exists()) {
             const data = docSnap.data();
             return {
+                id: 'main',
                 exchangeRate: data.exchangeRate ?? defaults.exchangeRate,
-                pricePerKiloLYD: data.pricePerKiloLYD ?? defaults.pricePerKiloLYD,
-                pricePerKiloUSD: data.pricePerKiloUSD ?? defaults.pricePerKiloUSD,
+                shippingCostUSD: data.shippingCostUSD ?? defaults.shippingCostUSD,
+                shippingPriceUSD: data.shippingPriceUSD ?? defaults.shippingPriceUSD,
             };
         } else {
             // If the document doesn't exist, create it with default values
@@ -186,8 +203,19 @@ export async function getAppSettings(): Promise<AppSettings> {
             return defaults;
         }
     } catch (error) {
-        console.error("Error getting app settings:", error);
-        return { exchangeRate: 1, pricePerKiloLYD: 0, pricePerKiloUSD: 0 };
+        console.error("Error getting system settings:", error);
+        return { id: 'main', exchangeRate: 1, shippingCostUSD: 4.5, shippingPriceUSD: 5.0 };
+    }
+}
+
+export async function updateSystemSettings(data: Partial<SystemSettings>): Promise<boolean> {
+    try {
+        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
+        await setDoc(settingsRef, data, { merge: true });
+        return true;
+    } catch (error) {
+        console.error("Error updating system settings:", error);
+        return false;
     }
 }
 
@@ -205,15 +233,11 @@ export async function getRawAppSettings(): Promise<Partial<AppSettings>> {
 
 
 export async function updateAppSettings(data: Partial<AppSettings>): Promise<boolean> {
-    try {
-        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
-        // Use set with merge option to create the document if it doesn't exist, or update it if it does.
-        await setDoc(settingsRef, data, { merge: true });
-        return true;
-    } catch (error) {
-        console.error("Error updating app settings:", error);
-        return false;
-    }
+    // Forward to new function for backward compatibility
+    return await updateSystemSettings({
+        exchangeRate: data.exchangeRate,
+        shippingPriceUSD: data.pricePerKiloUSD
+    });
 }
 
 
@@ -513,6 +537,23 @@ export async function getOrders(): Promise<Order[]> {
         return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
     } catch (error) {
         console.error("Error getting orders:", error);
+        return [];
+    }
+}
+
+export async function getOrdersByIds(ids: string[]): Promise<Order[]> {
+    try {
+        if (!ids || ids.length === 0) return [];
+        // Firestore 'in' query supports up to 10 items. For more, we need to batch or do parallel requests.
+        // For simplicity, let's do parallel getDoc requests since IDs are known.
+        const promises = ids.map(id => getDoc(doc(db, ORDERS_COLLECTION, id)));
+        const snapshots = await Promise.all(promises);
+
+        return snapshots
+            .filter(doc => doc.exists())
+            .map(doc => ({ id: doc.id, ...doc.data() } as Order));
+    } catch (error) {
+        console.error("Error getting orders by IDs:", error);
         return [];
     }
 }

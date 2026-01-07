@@ -11,19 +11,21 @@ import { ar } from 'date-fns/locale';
 import logo from '@/app/assets/logo.png';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const statusConfig: { [key in OrderStatus]: { text: string; className: string } } = {
+const statusConfig: Record<string, { text: string; className: string }> = {
     pending: { text: 'قيد التجهيز', className: 'bg-yellow-100 text-yellow-700' },
     processed: { text: 'تم التنفيذ', className: 'bg-cyan-100 text-cyan-700' },
     ready: { text: 'تم التجهيز', className: 'bg-indigo-100 text-indigo-700' },
     shipped: { text: 'تم الشحن', className: 'bg-blue-100 text-blue-700' },
-    arrived_dubai: { text: 'وصلت إلى دبي', className: 'bg-orange-100 text-orange-700' },
-    arrived_benghazi: { text: 'وصلت إلى بنغازي', className: 'bg-teal-100 text-teal-700' },
-    arrived_tobruk: { text: 'وصلت إلى طبرق', className: 'bg-purple-100 text-purple-700' },
+    arrived_misrata: { text: 'وصلت إلى مصراتة', className: 'bg-teal-100 text-teal-700' },
     out_for_delivery: { text: 'مع المندوب', className: 'bg-lime-100 text-lime-700' },
     delivered: { text: 'تم التسليم', className: 'bg-green-100 text-green-700' },
     cancelled: { text: 'ملغي', className: 'bg-red-100 text-red-700' },
     paid: { text: 'مدفوع', className: 'bg-green-100 text-green-700' },
     returned: { text: 'راجع', className: 'bg-red-100 text-red-700' },
+    // Legacy
+    arrived_dubai: { text: 'وصلت إلى دبي', className: 'bg-orange-100 text-orange-700' },
+    arrived_benghazi: { text: 'وصلت إلى بنغازي', className: 'bg-teal-100 text-teal-700' },
+    arrived_tobruk: { text: 'وصلت إلى طبرق', className: 'bg-purple-100 text-purple-700' },
 };
 
 const PrintUserStatementPageContent = () => {

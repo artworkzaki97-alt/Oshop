@@ -37,6 +37,7 @@ import { getUsers, addUser, updateUser, deleteUser } from '@/lib/actions';
 import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 import { motion } from 'framer-motion';
@@ -123,17 +124,24 @@ const AdminUsersPage = () => {
     });
   };
 
-  const generateNextUsername = () => {
+  const generateNextUsername = (prefix: string) => {
     const maxUserNumber = users.reduce((max, user) => {
-      if (user.username.startsWith('OS')) {
-        const num = parseInt(user.username.substring(2));
+      if (user.username.startsWith(prefix)) {
+        const rest = user.username.substring(prefix.length);
+        const num = parseInt(rest);
         if (!isNaN(num) && num > max) {
           return num;
         }
       }
       return max;
     }, 0);
-    return `OS${maxUserNumber + 1}`;
+
+    let nextNum = maxUserNumber + 1;
+    if (maxUserNumber === 0 && prefix !== 'OS') {
+      nextNum = 100;
+    }
+
+    return `${prefix}${nextNum}`;
   }
 
 
@@ -150,8 +158,9 @@ const AdminUsersPage = () => {
       if (currentUser) {
         await updateUser(currentUser.id, userData);
       } else {
+        const prefix = formData.get('prefix') as string || 'OS';
         const newUserDataWithDefaults: Omit<User, 'id'> = {
-          username: generateNextUsername(),
+          username: generateNextUsername(prefix),
           password: generatePassword(),
           orderCount: 0,
           debt: 0,
@@ -262,6 +271,22 @@ const AdminUsersPage = () => {
                     <Label htmlFor="name" className="text-right">الاسم</Label>
                     <Input id="name" name="name" defaultValue={currentUser?.name} className="col-span-3" />
                   </div>
+                  {!currentUser && (
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="prefix" className="text-right">رمز المدينة</Label>
+                      <Select name="prefix" defaultValue="OS">
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="اختر الرمز" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="OS">مكتب (OS)</SelectItem>
+                          <SelectItem value="M">مصراتة (M)</SelectItem>
+                          <SelectItem value="B">بنغازي (B)</SelectItem>
+                          <SelectItem value="T">طبرق (T)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {currentUser && (
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="username" className="text-right">اسم المستخدم</Label>

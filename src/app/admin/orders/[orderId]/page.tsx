@@ -30,19 +30,21 @@ import {
     ArrowLeft
 } from 'lucide-react';
 
-const statusConfig: { [key in OrderStatus]: { text: string; icon: React.ReactNode; className: string } } = {
+const statusConfig: Record<string, { text: string; icon: React.ReactNode; className: string }> = {
     pending: { text: 'قيد التجهيز', icon: <Clock className="w-5 h-5" />, className: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
     processed: { text: 'تم التنفيذ', icon: <CheckCircle className="w-5 h-5" />, className: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
     ready: { text: 'تم التجهيز', icon: <PackageIcon className="w-5 h-5" />, className: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
     shipped: { text: 'تم الشحن', icon: <Truck className="w-5 h-5" />, className: 'bg-blue-100 text-blue-700 border-blue-200' },
-    arrived_dubai: { text: 'وصلت إلى دبي', icon: <Plane className="w-5 h-5" />, className: 'bg-orange-100 text-orange-700 border-orange-200' },
-    arrived_benghazi: { text: 'وصلت إلى بنغازي', icon: <Building className="w-5 h-5" />, className: 'bg-teal-100 text-teal-700 border-teal-200' },
-    arrived_tobruk: { text: 'وصلت إلى طبرق', icon: <Building className="w-5 h-5" />, className: 'bg-purple-100 text-purple-700 border-purple-200' },
+    arrived_misrata: { text: 'وصلت إلى مصراتة', icon: <Building className="w-5 h-5" />, className: 'bg-teal-100 text-teal-700 border-teal-200' },
     out_for_delivery: { text: 'مع المندوب', icon: <MapPin className="w-5 h-5" />, className: 'bg-lime-100 text-lime-700 border-lime-200' },
     delivered: { text: 'تم التسليم', icon: <PackageCheck className="w-5 h-5" />, className: 'bg-green-100 text-green-700 border-green-200' },
     cancelled: { text: 'ملغي', icon: <PackageX className="w-5 h-5" />, className: 'bg-red-100 text-red-700 border-red-200' },
     paid: { text: 'مدفوع', icon: <CheckCircle className="w-4 h-4" />, className: 'bg-green-100 text-green-700' },
     returned: { text: 'راجع', icon: <PackageX className="w-5 h-5" />, className: 'bg-red-100 text-red-700 border-red-200' },
+    // Legacy
+    arrived_dubai: { text: 'وصلت إلى دبي', icon: <Plane className="w-5 h-5" />, className: 'bg-orange-100 text-orange-700 border-orange-200' },
+    arrived_benghazi: { text: 'وصلت إلى بنغازي', icon: <Building className="w-5 h-5" />, className: 'bg-teal-100 text-teal-700 border-teal-200' },
+    arrived_tobruk: { text: 'وصلت إلى طبرق', icon: <Building className="w-5 h-5" />, className: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 

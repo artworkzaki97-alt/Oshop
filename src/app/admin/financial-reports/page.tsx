@@ -44,19 +44,21 @@ import Link from 'next/link';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 
-const statusConfig: { [key in OrderStatus]: { text: string; className: string } } = {
+const statusConfig: Record<string, { text: string; className: string }> = {
     pending: { text: 'قيد التجهيز', className: 'bg-yellow-100 text-yellow-700' },
     processed: { text: 'تم التنفيذ', className: 'bg-cyan-100 text-cyan-700' },
     ready: { text: 'تم التجهيز', className: 'bg-indigo-100 text-indigo-700' },
     shipped: { text: 'تم الشحن', className: 'bg-blue-100 text-blue-700' },
-    arrived_dubai: { text: 'وصلت إلى دبي', className: 'bg-orange-100 text-orange-700' },
-    arrived_benghazi: { text: 'وصلت إلى بنغازي', className: 'bg-teal-100 text-teal-700' },
-    arrived_tobruk: { text: 'وصلت إلى طبرق', className: 'bg-purple-100 text-purple-700' },
+    arrived_misrata: { text: 'وصلت إلى مصراتة', className: 'bg-teal-100 text-teal-700' },
     out_for_delivery: { text: 'مع المندوب', className: 'bg-lime-100 text-lime-700' },
     delivered: { text: 'تم التسليم', className: 'bg-green-100 text-green-700' },
     cancelled: { text: 'ملغي', className: 'bg-red-100 text-red-700' },
     paid: { text: 'مدفوع', className: 'bg-green-100 text-green-700' },
     returned: { text: 'راجع', className: 'bg-red-100 text-red-700' },
+    // Legacy
+    arrived_dubai: { text: 'وصلت إلى دبي', className: 'bg-orange-100 text-orange-700' },
+    arrived_benghazi: { text: 'وصلت إلى بنغازي', className: 'bg-teal-100 text-teal-700' },
+    arrived_tobruk: { text: 'وصلت إلى طبرق', className: 'bg-purple-100 text-purple-700' },
 };
 
 type SortableKeys = 'customerName' | 'date' | 'status' | 'amount';
@@ -286,10 +288,15 @@ const FinancialReportsPage = () => {
         setIsResetDialogOpen(false);
     }
 
-    const { totalRevenue, totalDebt, totalExpenses, netProfit } = useMemo(() => {
+    const { totalRevenue, totalDebt, totalExpenses, netProfit, totalUSDCost } = useMemo(() => {
         const revenue = chartData.reduce((sum, item) => sum + item.revenue, 0);
         const expenses = chartData.reduce((sum, item) => sum + item.expenses, 0);
         const profit = chartData.reduce((sum, item) => sum + item.profit, 0);
+
+        // Calculate Total USD Cost corresponding to the filtered orders
+        const usdCost = dateFilteredOrders
+            .filter(o => o.status !== 'cancelled')
+            .reduce((sum, order) => sum + (order.companyWeightCostUSD || 0), 0);
 
         // Correct way to calculate debt for the selected period
         const debt = dateFilteredOrders
@@ -300,16 +307,17 @@ const FinancialReportsPage = () => {
             totalRevenue: revenue,
             totalDebt: debt,
             totalExpenses: expenses,
-            netProfit: profit - expenses
+            netProfit: profit - expenses,
+            totalUSDCost: usdCost
         };
     }, [chartData, dateFilteredOrders]);
 
 
     const summaryCards = [
-        { title: 'إجمالي الإيرادات', value: `${totalRevenue.toFixed(2)} د.ل`, icon: <DollarSign className="w-6 h-6" />, color: 'text-green-600' },
-        { title: 'إجمالي الديون', value: `${totalDebt.toFixed(2)} د.ل`, icon: <CreditCard className="w-6 h-6" />, color: 'text-destructive' },
-        { title: 'إجمالي المصروفات', value: `${totalExpenses.toFixed(2)} د.ل`, icon: <TrendingDown className="w-6 h-6" />, color: 'text-destructive' },
-        { title: 'صافي الربح', value: `${netProfit.toFixed(2)} د.ل`, icon: <TrendingUp className="w-6 h-6" />, color: netProfit >= 0 ? 'text-primary' : 'text-destructive' },
+        { title: 'الخزينة (دينار)', value: `${(totalRevenue - totalExpenses).toFixed(2)} د.ل`, icon: <DollarSign className="w-6 h-6" />, color: (totalRevenue - totalExpenses) >= 0 ? 'text-green-600' : 'text-destructive', description: "السيولة النقدية (إيرادات - مصروفات)" },
+        { title: 'التكلفة (دولار)', value: `${totalUSDCost.toFixed(2)} $`, icon: <DollarSign className="w-6 h-6" />, color: 'text-blue-600', description: "إجمالي تكلفة الشحن بالدولار" },
+        { title: 'إجمالي الديون', value: `${totalDebt.toFixed(2)} د.ل`, icon: <CreditCard className="w-6 h-6" />, color: 'text-destructive', description: "الديون المتبقية عند العملاء" },
+        { title: 'صافي الربح', value: `${netProfit.toFixed(2)} د.ل`, icon: <TrendingUp className="w-6 h-6" />, color: netProfit >= 0 ? 'text-primary' : 'text-destructive', description: "الأرباح المحققة" },
     ];
 
     const handleFilterChange = (type: string) => {
@@ -365,6 +373,7 @@ const FinancialReportsPage = () => {
                             </CardHeader>
                             <CardContent>
                                 <div className={`text-2xl font-bold ${card.color}`}>{card.value}</div>
+                                <p className="text-xs text-muted-foreground mt-1">{card.description}</p>
                             </CardContent>
                         </Card>
                     ))}

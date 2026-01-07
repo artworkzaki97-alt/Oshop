@@ -14,19 +14,21 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const statusConfig: { [key in OrderStatus]: { text: string; icon: React.ReactNode; className: string; bgClass: string } } = {
+const statusConfig: Record<string, { text: string; icon: React.ReactNode; className: string; bgClass: string }> = {
     pending: { text: 'قيد التجهيز', icon: <Clock className="w-5 h-5" />, className: 'text-yellow-700 border-yellow-200', bgClass: 'bg-yellow-100' },
     processed: { text: 'تم التنفيذ', icon: <CheckCircle className="w-5 h-5" />, className: 'text-cyan-700 border-cyan-200', bgClass: 'bg-cyan-100' },
     ready: { text: 'تم التجهيز', icon: <PackageIcon className="w-5 h-5" />, className: 'text-indigo-700 border-indigo-200', bgClass: 'bg-indigo-100' },
     shipped: { text: 'تم الشحن', icon: <Truck className="w-5 h-5" />, className: 'text-blue-700 border-blue-200', bgClass: 'bg-blue-100' },
-    arrived_dubai: { text: 'وصلت إلى دبي', icon: <Plane className="w-5 h-5" />, className: 'text-orange-700 border-orange-200', bgClass: 'bg-orange-100' },
-    arrived_benghazi: { text: 'وصلت إلى بنغازي', icon: <Building className="w-5 h-5" />, className: 'text-teal-700 border-teal-200', bgClass: 'bg-teal-100' },
-    arrived_tobruk: { text: 'وصلت إلى طبرق', icon: <Building className="w-5 h-5" />, className: 'text-purple-700 border-purple-200', bgClass: 'bg-purple-100' },
+    arrived_misrata: { text: 'وصلت إلى مصراتة', icon: <Building className="w-5 h-5" />, className: 'text-teal-700 border-teal-200', bgClass: 'bg-teal-100' },
     out_for_delivery: { text: 'مع المندوب', icon: <MapPin className="w-5 h-5" />, className: 'text-lime-700 border-lime-200', bgClass: 'bg-lime-100' },
     delivered: { text: 'تم التسليم', icon: <PackageCheck className="w-5 h-5" />, className: 'text-green-700 border-green-200', bgClass: 'bg-green-100' },
     cancelled: { text: 'ملغي', icon: <PackageX className="w-5 h-5" />, className: 'text-red-700 border-red-200', bgClass: 'bg-red-100' },
     paid: { text: 'مدفوع', icon: <DollarSign className="w-5 h-5" />, className: 'text-green-700 border-green-200', bgClass: 'bg-green-100' },
     returned: { text: 'راجع', icon: <PackageX className="w-5 h-5" />, className: 'text-red-700 border-red-200', bgClass: 'bg-red-100' },
+    // Legacy
+    arrived_dubai: { text: 'وصلت إلى دبي', icon: <Plane className="w-5 h-5" />, className: 'text-orange-700 border-orange-200', bgClass: 'bg-orange-100' },
+    arrived_benghazi: { text: 'وصلت إلى بنغازي', icon: <Building className="w-5 h-5" />, className: 'text-teal-700 border-teal-200', bgClass: 'bg-teal-100' },
+    arrived_tobruk: { text: 'وصلت إلى طبرق', icon: <Building className="w-5 h-5" />, className: 'text-purple-700 border-purple-200', bgClass: 'bg-purple-100' },
 };
 
 const DetailRow = ({ icon, label, value, valueClassName }: { icon: React.ReactNode, label: string, value: string | number | undefined, valueClassName?: string }) => (
