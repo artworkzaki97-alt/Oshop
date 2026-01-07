@@ -43,6 +43,16 @@ const DashboardPage = () => {
   const [totalDebt, setTotalDebt] = useState(0);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [trackId, setTrackId] = useState('');
+  const [greeting, setGreeting] = useState('');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour >= 4 && hour < 12) {
+      setGreeting('صباح الخير ☀️');
+    } else {
+      setGreeting('مساء الخير 🌙');
+    }
+  }, []);
 
   const router = useRouter();
 
@@ -142,7 +152,7 @@ const DashboardPage = () => {
             />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">صباح الخير ☀️</p>
+            <p className="text-xs text-muted-foreground">{greeting}</p>
             <h1 className="text-sm font-bold">{user?.name || 'زائر'}</h1>
           </div>
         </div>

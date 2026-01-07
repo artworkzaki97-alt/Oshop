@@ -125,7 +125,7 @@ const AdminUsersPage = () => {
 
   const generateNextUsername = () => {
     const maxUserNumber = users.reduce((max, user) => {
-      if (user.username.startsWith('MB')) {
+      if (user.username.startsWith('OS')) {
         const num = parseInt(user.username.substring(2));
         if (!isNaN(num) && num > max) {
           return num;
@@ -133,7 +133,7 @@ const AdminUsersPage = () => {
       }
       return max;
     }, 0);
-    return `MB${maxUserNumber + 1}`;
+    return `OS${maxUserNumber + 1}`;
   }
 
 
