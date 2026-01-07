@@ -199,7 +199,7 @@ export default function InventoryPage() {
                                         {product.quantity === 0 ? (
                                             <Badge variant="destructive">نفذت الكمية</Badge>
                                         ) : product.quantity <= product.minStockLevel ? (
-                                            <Badge variant="warning" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">منخفض</Badge>
+                                            <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 hover:bg-yellow-500/20">منخفض</Badge>
                                         ) : (
                                             <Badge variant="outline" className="text-green-600 border-green-600/20 bg-green-500/5">متوفر</Badge>
                                         )}
