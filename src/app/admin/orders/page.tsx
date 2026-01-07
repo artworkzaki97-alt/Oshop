@@ -795,7 +795,7 @@ const AdminOrdersPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="customer-price">سعر بيع الكيلو للزبون ($ دولار)</Label>
+              <Label htmlFor="customer-price">سعر بيع الكيلو للشحنة ($ دولار)</Label>
               <Input
                 id="customer-price"
                 type="number"
@@ -826,11 +826,11 @@ const AdminOrdersPage = () => {
                       <span>~ {companyTotalLYD.toFixed(2)} د.ل</span>
                     </div>
                     <div className="flex justify-between border-t pt-1 mt-1">
-                      <span>سعر البيع (زبون - $):</span>
+                      <span>سعر البيع (شحنة - $):</span>
                       <span className="font-bold">{customerTotalUSD.toFixed(2)} $</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>إجمالي البيع (زبون - د.ل):</span>
+                      <span>إجمالي البيع (شحنة - د.ل):</span>
                       <span className="font-bold text-green-600">{customerTotalLYD.toFixed(2)} د.ل</span>
                     </div>
                     <div className="flex justify-between pt-1 border-t mt-1">
