@@ -576,6 +576,7 @@ const AdminOrdersPage = () => {
                     <TableHead className='text-right font-bold'>كود التتبع</TableHead>
                     <TableHead className='text-right font-bold'>اسم العميل</TableHead>
                     <TableHead className='text-right font-bold'>المندوب</TableHead>
+                    <TableHead className='text-right font-bold'>الوزن</TableHead>
                     <TableHead className='text-right font-bold'>الإجمالي</TableHead>
                     <TableHead className='text-right font-bold'>المتبقي</TableHead>
                     <TableHead className='text-right font-bold'>الحالة</TableHead>
@@ -620,6 +621,7 @@ const AdminOrdersPage = () => {
                       </TableCell>
                       <TableCell className="font-medium">{order.customerName}</TableCell>
                       <TableCell>{order.representativeName ? <Badge variant="secondary" className="font-normal">{order.representativeName}</Badge> : <span className="text-muted-foreground text-sm">--</span>}</TableCell>
+                      <TableCell>{order.weightKG ? `${order.weightKG} كجم` : '-'}</TableCell>
                       <TableCell>{order.sellingPriceLYD.toFixed(2)} د.ل</TableCell>
                       <TableCell className={order.remainingAmount > 0 ? 'text-destructive font-bold' : 'text-green-600'}>
                         {order.remainingAmount.toFixed(2)} د.ل
