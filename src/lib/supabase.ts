@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Hardcoded credentials per user request for direct Vercel deployment without env vars
+const supabaseUrl = 'https://tflgxjuwjfljngzwbgiv.supabase.co';
+const supabaseKey = 'sb_publishable_mz1rlg5O9oRbLzDtvygTjQ_0dzQ6Mvv';
 
-if (!supabaseUrl || !supabaseKey) {
-    console.warn('Missing Supabase environment variables. Sync will be disabled.');
-}
+// if (!supabaseUrl || !supabaseKey) {
+//     console.warn('Missing Supabase environment variables. Sync will be disabled.');
+// }
 
-export const supabase = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseKey || 'placeholder');
+export const supabase = createClient(supabaseUrl, supabaseKey);
