@@ -679,7 +679,7 @@ const AdminOrdersPage = () => {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onSelect={() => openWeightDialog(order)}>
-                              <Scale className="ml-2 h-4 w-4" /> وزن الزبون
+                              <Scale className="ml-2 h-4 w-4" /> وزن الشحنة
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

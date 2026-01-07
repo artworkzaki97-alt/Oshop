@@ -897,7 +897,7 @@ export async function setCustomerWeightDetails(orderId: string, weight: number, 
                     type: 'order', // Using 'order' type as it affects the order value/debt
                     status: 'completed',
                     amount: costDifference, // Can be negative for reductions
-                    description: `تعديل وزن الزبون: ${weight} كجم (السابق: ${(oldCustomerWeightCost / (customerPricePerKilo || 1)).toFixed(2)} كجم)`
+                    description: `تعديل وزن الشحنة: ${weight} كجم (السابق: ${(oldCustomerWeightCost / (customerPricePerKilo || 1)).toFixed(2)} كجم)`
                 };
                 await transaction.set(transactionRef, newTransaction);
             }
