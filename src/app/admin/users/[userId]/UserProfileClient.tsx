@@ -46,6 +46,7 @@ const statusConfig: { [key in OrderStatus]: { text: string; className: string } 
     delivered: { text: 'تم التسليم', className: 'bg-green-500/10 text-green-500 border-green-500/20' },
     cancelled: { text: 'ملغي', className: 'bg-red-500/10 text-red-500 border-red-500/20' },
     paid: { text: 'مدفوع', className: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
+    returned: { text: 'راجع', className: 'bg-red-500/10 text-red-500 border-red-500/20' },
 };
 
 const container = {

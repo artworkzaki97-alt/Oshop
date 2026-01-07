@@ -41,7 +41,8 @@ export type OrderStatus =
   | 'out_for_delivery'
   | 'delivered'
   | 'cancelled'
-  | 'paid';
+  | 'paid'
+  | 'returned';
 
 export interface Order {
   id: string;

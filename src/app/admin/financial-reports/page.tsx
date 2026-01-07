@@ -56,6 +56,7 @@ const statusConfig: { [key in OrderStatus]: { text: string; className: string } 
     delivered: { text: 'تم التسليم', className: 'bg-green-100 text-green-700' },
     cancelled: { text: 'ملغي', className: 'bg-red-100 text-red-700' },
     paid: { text: 'مدفوع', className: 'bg-green-100 text-green-700' },
+    returned: { text: 'راجع', className: 'bg-red-100 text-red-700' },
 };
 
 type SortableKeys = 'customerName' | 'date' | 'status' | 'amount';

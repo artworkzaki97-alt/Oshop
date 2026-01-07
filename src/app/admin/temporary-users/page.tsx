@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MoreHorizontal, PlusCircle, Trash2, Edit, Truck, CheckCircle, Clock, DollarSign, CreditCard, Package, Loader2, UserPlus, UserX, Printer, Search } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Trash2, Edit, Truck, CheckCircle, Clock, DollarSign, CreditCard, Package, Loader2, UserPlus, UserX, Printer, Search, PackageX } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -55,6 +55,7 @@ const statusConfig: { [key in OrderStatus]: { text: string; icon: React.ReactNod
     delivered: { text: 'تم التسليم', icon: <CheckCircle className="w-4 h-4" />, className: 'bg-green-100 text-green-700' },
     cancelled: { text: 'ملغي', icon: <Trash2 className="w-4 h-4" />, className: 'bg-red-100 text-red-700' },
     paid: { text: 'مدفوع', icon: <CreditCard className="w-4 h-4" />, className: 'bg-green-100 text-green-700' },
+    returned: { text: 'راجع', icon: <PackageX className="w-4 h-4" />, className: 'bg-red-100 text-red-700' },
 };
 
 const AdminTemporaryUsersPage = () => {

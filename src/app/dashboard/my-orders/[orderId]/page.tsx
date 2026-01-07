@@ -144,7 +144,7 @@ const OrderDetailsContent = () => {
                                 {statusInfo.icon}
                                 {statusInfo.text}
                             </Badge>
-                            <h3 className="text-2xl font-bold mt-4 font-mono tracking-wide">{order.trackingNumber || order.invoiceNumber}</h3>
+                            <h3 className="text-2xl font-bold mt-4 font-mono tracking-wide">{order.trackingId || order.invoiceNumber}</h3>
                             <p className="text-sm text-muted-foreground mt-1">
                                 تم التحديث: {new Date(order.operationDate).toLocaleDateString('ar-LY')}
                             </p>

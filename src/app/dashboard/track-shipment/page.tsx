@@ -179,7 +179,7 @@ const TrackContent = () => {
                             <GlassCard className="p-0 rounded-[2.5rem] overflow-hidden border-orange-500/20">
                                 <div className="bg-gradient-to-br from-orange-500/10 to-transparent p-6 text-center border-b border-orange-500/10">
                                     <p className="text-sm text-muted-foreground mb-1">رقم الشحنة</p>
-                                    <h3 className="text-2xl font-black font-mono tracking-wider text-primary">{order.trackingNumber}</h3>
+                                    <h3 className="text-2xl font-black font-mono tracking-wider text-primary">{order.trackingId}</h3>
                                 </div>
 
                                 <div className="p-8 relative">
