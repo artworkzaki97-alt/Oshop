@@ -255,3 +255,18 @@ export interface InstantSale {
   netProfit: number;
   createdAt: string; // ISO String
 }
+
+export interface Product {
+  id: string;
+  name: string;
+  sku?: string;
+  quantity: number;
+  minStockLevel: number;
+  costPriceUSD: number;
+  sellingPriceLYD: number;
+  sellingPriceUSD?: number; // Optional secondary price
+  description?: string;
+  category?: string;
+  createdAt?: string; // ISO String
+  updatedAt?: string; // ISO String
+}

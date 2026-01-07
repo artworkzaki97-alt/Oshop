@@ -4,7 +4,7 @@
 
 import { dbAdapter } from "./db-adapter";
 import { where, increment, arrayUnion } from "./db-adapter";
-import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale, SystemSettings } from "./types";
+import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale, SystemSettings, Product } from "./types";
 
 // Map adapter methods to Firebase names for minimal code changes
 const db = dbAdapter;
@@ -98,6 +98,7 @@ const EXTERNAL_DEBTS_COLLECTION = 'externalDebts_v4';
 const CREDITORS_COLLECTION = 'creditors_v4';
 const MANUAL_LABELS_COLLECTION = 'manual_labels_v4';
 const INSTANT_SALES_COLLECTION = 'instant_sales_v4';
+const PRODUCTS_COLLECTION = 'products_v4';
 
 
 // --- Recalculation Function for Data Integrity ---
@@ -2114,6 +2115,88 @@ export async function deleteInstantSale(saleId: string): Promise<boolean> {
 }
 
 
+
+
+// --- Product (Inventory) Actions ---
+
+export async function getProducts(): Promise<Product[]> {
+    try {
+        const querySnapshot = await getDocs(collection(db, PRODUCTS_COLLECTION));
+        return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    } catch (error) {
+        console.error("Error getting products:", error);
+        return [];
+    }
+}
+
+export async function getProductById(productId: string): Promise<Product | null> {
+    try {
+        const docRef = doc(db, PRODUCTS_COLLECTION, productId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return { id: docSnap.id, ...docSnap.data() } as Product;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting product by ID:", error);
+        return null;
+    }
+}
+
+export async function addProduct(product: Omit<Product, 'id'>): Promise<Product | null> {
+    try {
+        const enrichedProduct = {
+            ...product,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        const docRef = await addDoc(collection(db, PRODUCTS_COLLECTION), enrichedProduct);
+        return { id: docRef.id, ...enrichedProduct };
+    } catch (error) {
+        console.error("Error adding product:", error);
+        return null;
+    }
+}
+
+export async function updateProduct(productId: string, data: Partial<Product>): Promise<boolean> {
+    try {
+        const docRef = doc(db, PRODUCTS_COLLECTION, productId);
+        await updateDoc(docRef, {
+            ...data,
+            updatedAt: new Date().toISOString()
+        });
+        return true;
+    } catch (error) {
+        console.error("Error updating product:", error);
+        return false;
+    }
+}
+
+export async function deleteProduct(productId: string): Promise<boolean> {
+    try {
+        await deleteDoc(doc(db, PRODUCTS_COLLECTION, productId));
+        return true;
+    } catch (error) {
+        console.error("Error deleting product:", error);
+        return false;
+    }
+}
+
+export async function adjustStock(productId: string, adjustment: number): Promise<boolean> {
+    try {
+        const docRef = doc(db, PRODUCTS_COLLECTION, productId);
+        // Using increment atomic operation if possible via adapter, or read-write
+        // The adapter 'increment' helper usage: updateDoc(ref, { quantity: increment(adj) })
+        await updateDoc(docRef, {
+            quantity: increment(adjustment),
+            updatedAt: new Date().toISOString()
+        });
+        return true;
+    } catch (error) {
+        console.error("Error adjusting stock:", error);
+        return false;
+    }
+}
 
 // --- Bulk Import ---
 export async function bulkImport(collectionName: string, data: any[]): Promise<{ success: boolean, count: number, error?: string }> {
