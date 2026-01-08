@@ -305,6 +305,7 @@ export interface TreasuryTransaction {
   id: string;
   amount: number;
   type: 'deposit' | 'withdrawal';
+  channel?: 'cash' | 'bank'; // Added channel
   description: string;
   relatedOrderId?: string;
   createdAt: string; // ISO
@@ -315,6 +316,7 @@ export interface WalletTransaction {
   userId: string;
   amount: number;
   type: 'deposit' | 'withdrawal';
+  paymentMethod?: 'cash' | 'bank' | 'other'; // Added paymentMethod
   description: string;
   relatedOrderId?: string;
   createdAt: string; // ISO

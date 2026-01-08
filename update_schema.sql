@@ -229,8 +229,20 @@ CREATE TABLE IF NOT EXISTS wallet_transactions_v4 (
   "userId" TEXT,
   amount FLOAT NOT NULL,
   type TEXT CHECK (type IN ('deposit', 'withdrawal')),
+  "paymentMethod" TEXT CHECK ("paymentMethod" IN ('cash', 'bank', 'other')), -- Added payment method
   description TEXT,
   "relatedOrderId" TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   "managerId" TEXT
+);
+
+-- 16. Treasury Transactions Table (If not already created by previous task)
+CREATE TABLE IF NOT EXISTS treasury_transactions_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  amount FLOAT NOT NULL,
+  type TEXT CHECK (type IN ('deposit', 'withdrawal')),
+  channel TEXT CHECK (channel IN ('cash', 'bank')), -- Added channel
+  description TEXT,
+  "relatedOrderId" TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

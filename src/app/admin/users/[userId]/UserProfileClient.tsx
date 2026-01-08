@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/components/ui/use-toast';
 import { addWalletTransaction } from '@/lib/actions';
 import {
@@ -26,6 +27,8 @@ import {
     ArrowUpRight,
     ArrowDownLeft,
     Wallet,
+    ArrowUpCircle,
+    ArrowDownCircle,
     Receipt
 } from 'lucide-react';
 import Link from 'next/link';
@@ -88,6 +91,7 @@ export const UserProfileClient = ({
     const [walletActionType, setWalletActionType] = React.useState<'deposit' | 'withdrawal'>('deposit');
     const [walletAmount, setWalletAmount] = React.useState('');
     const [walletDescription, setWalletDescription] = React.useState('');
+    const [paymentMethod, setPaymentMethod] = React.useState<'cash' | 'bank'>('cash');
     const [isSubmittingWallet, setIsSubmittingWallet] = React.useState(false);
     const { toast } = useToast();
 
@@ -103,7 +107,9 @@ export const UserProfileClient = ({
             user.id,
             amount,
             walletActionType,
-            walletDescription || (walletActionType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد')
+            walletDescription || (walletActionType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد'),
+            undefined, // managerId
+            walletActionType === 'deposit' ? paymentMethod : undefined
         );
 
         if (success) {
@@ -294,18 +300,70 @@ export const UserProfileClient = ({
                                     walletTransactions.map((tx) => (
                                         <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 mb-3 border border-transparent hover:border-primary/10">
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                                    {tx.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                                                <div className={`p-2 rounded-full ${tx.type === 'deposit' ? 'bg-emerald-100/50 text-emerald-600' : 'bg-red-100/50 text-red-600'}`}>
+                                                    {tx.type === 'deposit' ? <ArrowUpCircle className="w-5 h-5" /> : <ArrowDownCircle className="w-5 h-5" />}
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-sm">{tx.description}</h4>
-                                                    <p className="text-[10px] text-muted-foreground">{new Date(tx.createdAt).toLocaleString('ar-LY')}</p>
+                                                    <p className="font-semibold">{tx.type === 'deposit' ? 'إيداع' : 'سحب'}</p>
+                                                    <p className="text-xs text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('ar-LY', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
                                                 </div>
                                             </div>
                                             <div className="text-left">
-                                                <p className={`font-bold ${tx.type === 'deposit' ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                    {tx.type === 'deposit' ? '+' : '-'}{tx.amount.toLocaleString()} د.ل
+                                                <p className={`font-bold ${tx.type === 'deposit' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                    {tx.type === 'deposit' ? '+' : '-'}{tx.amount.toFixed(2)} د.ل
                                                 </p>
+                                                <div className="flex items-center justify-end gap-2 mt-1">
+                                                    <p className="text-xs text-muted-foreground truncate max-w-[150px]">{tx.description}</p>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-6 w-6"
+                                                        title="طباعة إيصال"
+                                                        onClick={() => {
+                                                            const printWindow = window.open('', '', 'width=600,height=600');
+                                                            if (printWindow) {
+                                                                printWindow.document.write(`
+                                                                    <html dir="rtl">
+                                                                        <head>
+                                                                            <title>إيصال مالي - ${tx.id.slice(0, 8)}</title>
+                                                                            <style>
+                                                                                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; text-align: center; border: 1px solid #ccc; max-width: 500px; margin: 20px auto; }
+                                                                                .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+                                                                                .amount { font-size: 32px; font-weight: bold; color: ${tx.type === 'deposit' ? '#10b981' : '#ef4444'}; margin: 20px 0; }
+                                                                                .details { text-align: right; margin: 20px 0; line-height: 1.8; }
+                                                                                .footer { margin-top: 40px; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px; }
+                                                                                @media print { body { border: none; margin: 0; } }
+                                                                            </style>
+                                                                        </head>
+                                                                        <body>
+                                                                            <div class="header">
+                                                                                <h2>إيصال ${tx.type === 'deposit' ? 'إيداع' : 'سحب'} مالي</h2>
+                                                                                <p>${new Date().toLocaleString('ar-LY')}</p>
+                                                                            </div>
+                                                                            <div class="amount">${tx.amount.toFixed(2)} د.ل</div>
+                                                                            <div class="details">
+                                                                                <strong>اسم العميل:</strong> ${user.name}<br>
+                                                                                <strong>التاريخ:</strong> ${new Date(tx.createdAt).toLocaleString('ar-LY')}<br>
+                                                                                <strong>النوع:</strong> ${tx.type === 'deposit' ? 'إيداع في المحفظة' : 'سحب من المحفظة'}<br>
+                                                                                <strong>الوصف:</strong> ${tx.description}<br>
+                                                                                ${tx.paymentMethod ? `<strong>طريقة الدفع:</strong> ${tx.paymentMethod === 'cash' ? 'نقدي' : 'مصرفي'}<br>` : ''}
+                                                                                <strong>رقم العملية:</strong> ${tx.id}
+                                                                            </div>
+                                                                            <div class="footer">
+                                                                                <p>Huwiyya Shipping - Oshop</p>
+                                                                                <p>تم استخراج هذا الإيصال إلكترونياً</p>
+                                                                            </div>
+                                                                            <script>window.print();</script>
+                                                                        </body>
+                                                                    </html>
+                                                                `);
+                                                                printWindow.document.close();
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Printer className="w-3 h-3" />
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))
@@ -482,6 +540,29 @@ export const UserProfileClient = ({
                                     onChange={(e) => setWalletDescription(e.target.value)}
                                 />
                             </div>
+
+                            {walletActionType === 'deposit' && (
+                                <div className="space-y-3">
+                                    <Label>طريقة الإيداع</Label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div
+                                            onClick={() => setPaymentMethod('cash')}
+                                            className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center gap-2 transition-all duration-200 ${paymentMethod === 'cash' ? 'border-primary bg-primary/10' : 'border-transparent bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'}`}
+                                        >
+                                            <Wallet className={`w-6 h-6 ${paymentMethod === 'cash' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                            <span className={`font-bold ${paymentMethod === 'cash' ? 'text-primary' : 'text-muted-foreground'}`}>نقدي (Cash)</span>
+                                        </div>
+
+                                        <div
+                                            onClick={() => setPaymentMethod('bank')}
+                                            className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center justify-center gap-2 transition-all duration-200 ${paymentMethod === 'bank' ? 'border-primary bg-primary/10' : 'border-transparent bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'}`}
+                                        >
+                                            <CreditCard className={`w-6 h-6 ${paymentMethod === 'bank' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                            <span className={`font-bold ${paymentMethod === 'bank' ? 'text-primary' : 'text-muted-foreground'}`}>مصرفي (Bank)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setIsWalletDialogOpen(false)}>إلغاء</Button>

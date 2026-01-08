@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DollarSign, CreditCard, MoreHorizontal, Edit, Trash2, TrendingUp, RefreshCcw, TrendingDown, Calendar as CalendarIcon, Loader2, Search, ArrowUpDown } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
-import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses, getCreditors, getManagers } from '@/lib/actions';
-import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor, Manager } from '@/lib/types';
+import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses, getCreditors, getManagers, getAllWalletTransactions } from '@/lib/actions';
+import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor, Manager, WalletTransaction } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
     DropdownMenu,
@@ -83,6 +83,7 @@ const FinancialReportsPage = () => {
     const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
     const [managers, setManagers] = useState<Manager[]>([]);
     const [selectedManagerId, setSelectedManagerId] = useState<string>('all');
+    const [allWalletTransactions, setAllWalletTransactions] = useState<WalletTransaction[]>([]); // Added state
 
     const [filterType, setFilterType] = useState<string>('monthly');
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
@@ -91,13 +92,14 @@ const FinancialReportsPage = () => {
 
     const fetchData = async () => {
         setIsLoading(true);
-        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses, fetchedCreditors, fetchedManagers] = await Promise.all([
+        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses, fetchedCreditors, fetchedManagers, fetchedWalletTransactions] = await Promise.all([
             getTransactions(),
             getOrders(),
             getAppSettings(),
             getExpenses(),
             getCreditors(),
             getManagers(),
+            getAllWalletTransactions() // Added fetch
         ]);
         setAllTransactions(fetchedTransactions);
         setAllOrders(fetchedOrders);
@@ -105,6 +107,7 @@ const FinancialReportsPage = () => {
         setAllExpenses(fetchedExpenses);
         setAllCreditors(fetchedCreditors);
         setManagers(fetchedManagers);
+        setAllWalletTransactions(fetchedWalletTransactions);
         setIsLoading(false);
     }
 
@@ -148,26 +151,35 @@ const FinancialReportsPage = () => {
         let dateFilteredTransactions = regularTransactions;
         let dateFilteredExpenses = allExpenses;
         let dateFilteredOrders = regularOrders;
+        let dateFilteredWalletTransactions = allWalletTransactions; // Added
 
-        // Filter by Manager
+        // Filter by Manager (Wallet transactions also have managerId)
         if (selectedManagerId !== 'all') {
             dateFilteredTransactions = dateFilteredTransactions.filter(t => t.managerId === selectedManagerId);
             dateFilteredExpenses = dateFilteredExpenses.filter(e => e.managerId === selectedManagerId);
             dateFilteredOrders = dateFilteredOrders.filter(o => o.managerId === selectedManagerId);
+            dateFilteredWalletTransactions = dateFilteredWalletTransactions.filter(t => t.managerId === selectedManagerId); // Added
         }
 
         if (startDate && endDate) {
+            const start = startDate!;
+            const end = endDate!;
+
             dateFilteredTransactions = regularTransactions.filter(t => {
                 const tDate = parseISO(t.date);
-                return tDate >= startDate! && tDate <= endDate!;
+                return tDate >= start && tDate <= end;
             });
             dateFilteredExpenses = allExpenses.filter(e => {
                 const eDate = parseISO(e.date);
-                return eDate >= startDate! && eDate <= endDate!;
+                return eDate >= start && eDate <= end;
             });
             dateFilteredOrders = regularOrders.filter(o => {
                 const oDate = parseISO(o.operationDate);
-                return oDate >= startDate! && oDate <= endDate!;
+                return oDate >= start && oDate <= end;
+            });
+            dateFilteredWalletTransactions = allWalletTransactions.filter(t => {
+                const tDate = parseISO(t.createdAt);
+                return tDate >= start && tDate <= end;
             });
         }
 
@@ -211,6 +223,13 @@ const FinancialReportsPage = () => {
             dataMap[key].revenue += t.amount;
         });
 
+        // Process WALLET DEPOSITS for revenue (Added)
+        dateFilteredWalletTransactions.filter(t => t.type === 'deposit').forEach(t => {
+            const key = format(parseISO(t.createdAt), dateFormat);
+            if (!dataMap[key]) dataMap[key] = { revenue: 0, expenses: 0, profit: 0 };
+            dataMap[key].revenue += t.amount;
+        });
+
         // Process expenses
         dateFilteredExpenses.forEach(e => {
             const key = format(parseISO(e.date), dateFormat);
@@ -244,7 +263,7 @@ const FinancialReportsPage = () => {
             dateFilteredOrders: dateFilteredOrders
         };
 
-    }, [filterType, dateRange, allTransactions, allOrders, allExpenses, searchQuery, sortConfig, settings]);
+    }, [filterType, dateRange, allTransactions, allOrders, allExpenses, searchQuery, sortConfig, settings, allWalletTransactions]);
 
     const requestSort = (key: SortableKeys) => {
         let direction: 'ascending' | 'descending' = 'ascending';

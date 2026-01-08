@@ -2452,7 +2452,7 @@ export async function getTreasuryBalance(): Promise<number> {
     }
 }
 
-export async function addTreasuryTransaction(tx: { amount: number, type: 'deposit' | 'withdrawal', description: string, relatedOrderId?: string }) {
+export async function addTreasuryTransaction(tx: { amount: number, type: 'deposit' | 'withdrawal', description: string, relatedOrderId?: string, channel?: 'cash' | 'bank' }) {
     try {
         const { error } = await supabaseAdmin
             .from(TREASURY_COLLECTION)
@@ -2511,6 +2511,8 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
     }
 }
 
+
+
 // --- User Wallet Actions ---
 
 export async function getUserWalletBalance(userId: string): Promise<number> {
@@ -2534,7 +2536,8 @@ export async function addWalletTransaction(
     amount: number,
     type: 'deposit' | 'withdrawal',
     description: string,
-    managerId?: string
+    managerId?: string,
+    paymentMethod?: 'cash' | 'bank' | 'other'
 ): Promise<boolean> {
     try {
         // 1. Add Transaction
@@ -2545,6 +2548,7 @@ export async function addWalletTransaction(
                 amount,
                 type,
                 description,
+                paymentMethod,
                 managerId: managerId || 'system',
                 created_at: new Date().toISOString()
             }]);
@@ -2563,6 +2567,17 @@ export async function addWalletTransaction(
             .eq('id', userId);
 
         if (updateError) throw updateError;
+
+        // 3. Mirror to Treasury if currently adding funds (Deposit) and method is Cash/Bank
+        if (type === 'deposit' && (paymentMethod === 'cash' || paymentMethod === 'bank')) {
+            await addTreasuryTransaction({
+                amount: amount,
+                type: 'deposit',
+                channel: paymentMethod,
+                description: `إيداع محفظة: ${description} (User: ${userId})`,
+                relatedOrderId: undefined
+            });
+        }
 
         return true;
     } catch (error) {
@@ -2586,4 +2601,20 @@ export async function getWalletTransactions(userId: string): Promise<WalletTrans
         return [];
     }
 }
+
+export async function getAllWalletTransactions(): Promise<WalletTransaction[]> {
+    try {
+        const { data, error } = await supabase
+            .from('wallet_transactions_v4')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return (data as WalletTransaction[]) || [];
+    } catch (error) {
+        console.error("Error fetching all wallet transactions:", error);
+        return [];
+    }
+}
+
 
