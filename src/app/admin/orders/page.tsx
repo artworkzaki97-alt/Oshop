@@ -55,7 +55,7 @@ import {
   Package, Search, PlusCircle, Filter, MoreHorizontal,
   Edit, Trash2, Printer, MapPin, CheckCircle, Clock,
   DollarSign, Truck, Building, Plane, UserPlus, UserX,
-  Copy, Loader2, X, Sparkles
+  Copy, Loader2, X, Sparkles, Users, RefreshCw
 } from "lucide-react";
 
 // Types & Actions
@@ -66,7 +66,8 @@ import {
   updateOrder,
   getRepresentatives,
   assignRepresentativeToOrder,
-  unassignRepresentativeFromOrder
+  unassignRepresentativeFromOrder,
+  bulkAssignRepresentativeToOrder
 } from '@/lib/actions';
 
 // --- CONFIGURATION ---
@@ -109,6 +110,16 @@ export default function AdminOrdersPage() {
 
   const [quickEditOpen, setQuickEditOpen] = useState(false);
   const [orderToQuickEdit, setOrderToQuickEdit] = useState<Order | null>(null);
+
+  // Bulk Dialogs
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+
+  const [selectedRepId, setSelectedRepId] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<OrderStatus | ''>('');
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
 
   // -- Data Fetching --
   const fetchData = useCallback(async () => {
@@ -224,8 +235,91 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // --- Bulk Actions Handlers ---
+
+  const handleBulkPrint = () => {
+    const ids = Array.from(selectedRows).join(',');
+    window.open(`/admin/orders/print_bulk?ids=${ids}`, '_blank');
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkProcessing(true);
+    try {
+      const ids = Array.from(selectedRows);
+      // Wait for all deletions to complete
+      await Promise.all(ids.map(id => deleteOrder(id)));
+
+      setOrders(prev => prev.filter(o => !selectedRows.has(o.id)));
+      setSelectedRows(new Set());
+      setBulkDeleteOpen(false);
+      toast({ title: "تم الحذف", description: `تم حذف ${ids.length} طلب بنجاح` });
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast({ title: "خطأ", description: "فشل حذف بعض الطلبات", variant: "destructive" });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!selectedRepId) return;
+    setIsBulkProcessing(true);
+    try {
+      const ids = Array.from(selectedRows);
+      const rep = representatives.find(r => r.id === selectedRepId);
+
+      if (!rep) throw new Error("Rep not found");
+
+      await bulkAssignRepresentativeToOrder(ids, selectedRepId, rep.name);
+
+      // Optimistic Update
+      setOrders(prev => prev.map(o => selectedRows.has(o.id) ? {
+        ...o,
+        representativeId: selectedRepId,
+        representativeName: rep.name,
+        status: 'out_for_delivery'
+      } : o));
+
+      setBulkAssignOpen(false);
+      setSelectedRepId('');
+      setSelectedRows(new Set()); // Optional: keep selection or unclear? usually uncheck
+      toast({ title: "تم الإسناد", description: `تم إسناد ${ids.length} طلب للمندوب ${rep.name}` });
+
+    } catch (error) {
+      console.error("Bulk assign failed", error);
+      toast({ title: "خطأ", description: "فشل إسناد الطلبات", variant: "destructive" });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+  const handleBulkStatus = async () => {
+    if (!selectedStatus) return;
+    setIsBulkProcessing(true);
+    try {
+      const ids = Array.from(selectedRows);
+
+      // Using Promise.all for parallel updates
+      await Promise.all(ids.map(id => updateOrder(id, { status: selectedStatus })));
+
+      setOrders(prev => prev.map(o => selectedRows.has(o.id) ? { ...o, status: selectedStatus } : o));
+
+      setBulkStatusOpen(false);
+      setSelectedStatus('');
+      setSelectedRows(new Set());
+      toast({ title: "تم التحديث", description: `تم تحديث حالة ${ids.length} طلب` });
+
+    } catch (error) {
+      console.error("Bulk status update failed", error);
+      toast({ title: "خطأ", description: "فشل تحديث الحالة للبعض", variant: "destructive" });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
+
+
   return (
-    <div className="p-4 md:p-8 space-y-6 min-h-screen bg-gray-50/50" dir="rtl">
+    <div className="p-4 md:p-8 space-y-6 min-h-screen bg-gray-50/50 pb-24" dir="rtl">
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -474,6 +568,49 @@ export default function AdminOrdersPage() {
         يتم عرض آخر {orders.length} طلب
       </div>
 
+      {/* Floating Bulk Action Bar */}
+      <AnimatePresence>
+        {selectedRows.size > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white border shadow-2xl rounded-full px-6 py-3 flex items-center gap-4 z-50 max-w-[90vw] overflow-x-auto"
+          >
+            <span className="text-sm font-semibold whitespace-nowrap ml-2 border-l pl-4">
+              تم تحديد {selectedRows.size}
+            </span>
+
+            <Button size="sm" variant="outline" className="gap-2 rounded-full h-8" onClick={handleBulkPrint}>
+              <Printer className="w-3.5 h-3.5" />
+              طباعة
+            </Button>
+
+            <Button size="sm" variant="outline" className="gap-2 rounded-full h-8" onClick={() => setBulkStatusOpen(true)}>
+              <RefreshCw className="w-3.5 h-3.5" />
+              تحديث الحالة
+            </Button>
+
+            <Button size="sm" variant="outline" className="gap-2 rounded-full h-8" onClick={() => setBulkAssignOpen(true)}>
+              <Truck className="w-3.5 h-3.5" />
+              إسناد
+            </Button>
+
+            <div className="w-px h-4 bg-gray-200 mx-1"></div>
+
+            <Button size="sm" variant="destructive" className="gap-2 rounded-full h-8" onClick={() => setBulkDeleteOpen(true)}>
+              <Trash2 className="w-3.5 h-3.5" />
+              حذف
+            </Button>
+
+            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full ml-1" onClick={() => setSelectedRows(new Set())}>
+              <X className="w-4 h-4" />
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
       {/* Delete Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent dir="rtl">
@@ -491,6 +628,97 @@ export default function AdminOrdersPage() {
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>إلغاء</Button>
             <Button variant="destructive" onClick={confirmDelete}>حذف نهائي</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>حذف جماعي</DialogTitle>
+            <DialogDescription>
+              أنت على وشك حذف {selectedRows.size} من الطلبات المحددة. هل أنت متأكد؟ لا يمكن التراجع عن هذا الإجراء.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>إلغاء</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={isBulkProcessing}>
+              {isBulkProcessing && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+              حذف {selectedRows.size} طلب
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Status Update Dialog */}
+      <Dialog open={bulkStatusOpen} onOpenChange={setBulkStatusOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تحديث الحالة جماعي</DialogTitle>
+            <DialogDescription>
+              تغيير حالة {selectedRows.size} طلب محدد
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">الحالة الجديدة</Label>
+              <div className="col-span-3">
+                <Select value={selectedStatus} onValueChange={(val) => setSelectedStatus(val as OrderStatus)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر الحالة..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allStatuses.map(s => (
+                      <SelectItem key={s} value={s}>{statusConfig[s].text}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkStatusOpen(false)}>إلغاء</Button>
+            <Button onClick={handleBulkStatus} disabled={!selectedStatus || isBulkProcessing}>
+              {isBulkProcessing && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+              تحديث
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Assign Dialog */}
+      <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>إسناد لمندوب جماعي</DialogTitle>
+            <DialogDescription>
+              إسناد {selectedRows.size} طلب لمندوب محدد. (سيتم تغيير الحالة إلى "مع المندوب")
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">المندوب</Label>
+              <div className="col-span-3">
+                <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر المندوب..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {representatives.map(rep => (
+                      <SelectItem key={rep.id} value={rep.id}>{rep.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkAssignOpen(false)}>إلغاء</Button>
+            <Button onClick={handleBulkAssign} disabled={!selectedRepId || isBulkProcessing}>
+              {isBulkProcessing && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+              إسناد
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
