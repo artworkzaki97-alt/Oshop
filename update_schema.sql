@@ -21,8 +21,10 @@ CREATE TABLE IF NOT EXISTS users_v4 (
   address TEXT,
   "orderCount" INTEGER DEFAULT 0,
   debt FLOAT DEFAULT 0,
+  "walletBalance" FLOAT DEFAULT 0,
   "orderCounter" INTEGER DEFAULT 0
 );
+
 
 -- 3. Global Sites Table (New Phase 6)
 CREATE TABLE IF NOT EXISTS global_sites_v4 (
@@ -173,4 +175,62 @@ CREATE TABLE IF NOT EXISTS notifications_v4 (
   "userId" TEXT,
   timestamp TEXT,
   "isRead" BOOLEAN DEFAULT FALSE
+);
+
+-- 11. Settings Table
+CREATE TABLE IF NOT EXISTS settings_v4 (
+  id TEXT PRIMARY KEY,
+  "exchangeRate" FLOAT DEFAULT 1,
+  "shippingCostUSD" FLOAT DEFAULT 4.5,
+  "shippingPriceUSD" FLOAT DEFAULT 5.0
+);
+
+-- 12. Treasury Transactions Table
+CREATE TABLE IF NOT EXISTS treasury_transactions_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  amount FLOAT NOT NULL,
+  type TEXT CHECK (type IN ('deposit', 'withdrawal')),
+  description TEXT,
+  "relatedOrderId" TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 13. Temporary Orders Table (for Batch Imports)
+CREATE TABLE IF NOT EXISTS "tempOrders_v4" (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "invoiceName" TEXT,
+  "totalAmount" FLOAT DEFAULT 0,
+  "remainingAmount" FLOAT DEFAULT 0,
+  status TEXT,
+  "subOrders" JSONB, -- Stored as JSON
+  "createdAt" TEXT,
+  "assignedUserId" TEXT,
+  "assignedUserName" TEXT,
+  "parentInvoiceId" TEXT
+);
+
+-- 14. Manual Shipping Labels
+CREATE TABLE IF NOT EXISTS manual_labels_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "invoiceNumber" TEXT,
+  "operationDate" TEXT,
+  "customerName" TEXT,
+  "customerAddress" TEXT,
+  "customerPhone" TEXT,
+  "itemDescription" TEXT,
+  "trackingId" TEXT,
+  "sellingPriceLYD" FLOAT DEFAULT 0,
+  "remainingAmount" FLOAT DEFAULT 0
+);
+
+-- 15. Wallet Transactions Table
+CREATE TABLE IF NOT EXISTS wallet_transactions_v4 (
+  id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
+  "userId" TEXT,
+  amount FLOAT NOT NULL,
+  type TEXT CHECK (type IN ('deposit', 'withdrawal')),
+  description TEXT,
+  "relatedOrderId" TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "managerId" TEXT
 );

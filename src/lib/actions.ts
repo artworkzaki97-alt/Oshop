@@ -7,7 +7,11 @@ import { cookies } from 'next/headers';
 import { dbAdapter } from "./db-adapter";
 import { where, increment, arrayUnion } from "./db-adapter";
 import { supabaseAdmin } from "./supabase-admin";
-import { Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification, AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel, SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard } from "./types";
+import {
+    Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification,
+    AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel,
+    SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard, TreasuryTransaction, WalletTransaction
+} from "./types";
 
 // ... (existing code)
 
@@ -184,7 +188,8 @@ export async function getAppSettings(): Promise<AppSettings> {
         return {
             exchangeRate: settings.exchangeRate,
             pricePerKiloLYD: 0, // Deprecated map
-            pricePerKiloUSD: settings.shippingPriceUSD, // Mapping new field to old for compatibility if needed
+            pricePerKiloUSD: settings.shippingCostUSD, // Mapping shippingCostUSD -> pricePerKiloUSD (Company Cost)
+            customerPricePerKiloUSD: settings.shippingPriceUSD, // Mapping shippingPriceUSD -> customerPricePerKiloUSD (Customer Cost)
         };
     } catch (error) {
         console.error("Error getting app settings:", error);
@@ -2505,3 +2510,80 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
         console.log(`[processCostDeduction] Cost fully covered by card.`);
     }
 }
+
+// --- User Wallet Actions ---
+
+export async function getUserWalletBalance(userId: string): Promise<number> {
+    try {
+        const { data, error } = await supabase
+            .from(USERS_TABLE)
+            .select('walletBalance')
+            .eq('id', userId)
+            .single();
+
+        if (error) throw error;
+        return data.walletBalance || 0;
+    } catch (error) {
+        console.error("Error fetching wallet balance:", error);
+        return 0;
+    }
+}
+
+export async function addWalletTransaction(
+    userId: string,
+    amount: number,
+    type: 'deposit' | 'withdrawal',
+    description: string,
+    managerId?: string
+): Promise<boolean> {
+    try {
+        // 1. Add Transaction
+        const { error: txError } = await supabase
+            .from('wallet_transactions_v4')
+            .insert([{
+                userId,
+                amount,
+                type,
+                description,
+                managerId: managerId || 'system',
+                created_at: new Date().toISOString()
+            }]);
+
+        if (txError) throw txError;
+
+        // 2. Update User Balance
+        const currentBalance = await getUserWalletBalance(userId);
+        const newBalance = type === 'deposit'
+            ? currentBalance + amount
+            : currentBalance - amount;
+
+        const { error: updateError } = await supabase
+            .from(USERS_TABLE)
+            .update({ walletBalance: newBalance })
+            .eq('id', userId);
+
+        if (updateError) throw updateError;
+
+        return true;
+    } catch (error) {
+        console.error("Error adding wallet transaction:", error);
+        return false;
+    }
+}
+
+export async function getWalletTransactions(userId: string): Promise<WalletTransaction[]> {
+    try {
+        const { data, error } = await supabase
+            .from('wallet_transactions_v4')
+            .select('*')
+            .eq('userId', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return (data as WalletTransaction[]) || [];
+    } catch (error) {
+        console.error("Error fetching wallet transactions:", error);
+        return [];
+    }
+}
+

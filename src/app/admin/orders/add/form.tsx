@@ -180,7 +180,9 @@ const AddOrderForm = () => {
                     }
                 } else { // Only set defaults for new orders
                     setPricePerKilo(settings.pricePerKiloUSD ?? 0);
-                    setCustomerWeightCost(settings.pricePerKiloLYD ?? 0);
+                    setPricePerKiloCurrency('USD');
+                    setCustomerWeightCost(settings.customerPricePerKiloUSD ?? 0);
+                    setCustomerWeightCostCurrency('USD');
                     setCostExchangeRate(settings.exchangeRate || 0);
                 }
 

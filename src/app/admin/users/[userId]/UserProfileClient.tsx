@@ -2,11 +2,16 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Order, Transaction, User, OrderStatus, Deposit } from '@/lib/types';
+import { Order, Transaction, User, OrderStatus, Deposit, WalletTransaction } from '@/lib/types';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from '@/components/ui/use-toast';
+import { addWalletTransaction } from '@/lib/actions';
 import {
     User as UserIcon,
     Phone,
@@ -32,6 +37,7 @@ interface UserProfileClientProps {
     orders: Order[];
     transactions: Transaction[];
     deposits: Deposit[];
+    walletTransactions: WalletTransaction[];
     totalOrdersValue: number;
     totalOrdersCount: number;
     totalDebt: number;
@@ -72,10 +78,47 @@ export const UserProfileClient = ({
     orders,
     transactions,
     deposits,
+    walletTransactions,
     totalOrdersValue,
     totalOrdersCount,
     totalDebt
 }: UserProfileClientProps) => {
+
+    const [isWalletDialogOpen, setIsWalletDialogOpen] = React.useState(false);
+    const [walletActionType, setWalletActionType] = React.useState<'deposit' | 'withdrawal'>('deposit');
+    const [walletAmount, setWalletAmount] = React.useState('');
+    const [walletDescription, setWalletDescription] = React.useState('');
+    const [isSubmittingWallet, setIsSubmittingWallet] = React.useState(false);
+    const { toast } = useToast();
+
+    const handleWalletAction = async () => {
+        const amount = parseFloat(walletAmount);
+        if (!amount || amount <= 0) {
+            toast({ title: "خطأ", description: "الرجاء إدخال مبلغ صحيح", variant: "destructive" });
+            return;
+        }
+
+        setIsSubmittingWallet(true);
+        const success = await addWalletTransaction(
+            user.id,
+            amount,
+            walletActionType,
+            walletDescription || (walletActionType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد')
+        );
+
+        if (success) {
+            toast({ title: "نجاح", description: "تمت العملية بنجاح" });
+            setIsWalletDialogOpen(false);
+            setWalletAmount('');
+            setWalletDescription('');
+            // Optional: Trigger a refresh or update local state if needed. 
+            // Ideally, we should router.refresh() or passed callback.
+            window.location.reload();
+        } else {
+            toast({ title: "خطأ", description: "فشلت العملية", variant: "destructive" });
+        }
+        setIsSubmittingWallet(false);
+    };
 
     return (
         <motion.div
@@ -155,6 +198,33 @@ export const UserProfileClient = ({
                 </GlassCard>
             </motion.div>
 
+            {/* Wallet Section */}
+            <motion.div variants={itemVariant} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <GlassCard variant="neon" className="border-l-4 border-l-emerald-500 col-span-1 md:col-span-3">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="p-4 bg-emerald-500/10 rounded-full text-emerald-500">
+                                <Wallet className="w-8 h-8" />
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground font-medium mb-1">رصيد المحفظة</p>
+                                <h3 className="text-4xl font-black text-emerald-500">{user.walletBalance?.toLocaleString() || 0} <span className="text-lg font-normal text-muted-foreground">د.ل</span></h3>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => { setWalletActionType('deposit'); setIsWalletDialogOpen(true); }} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+                                <ArrowDownLeft className="w-4 h-4" />
+                                إيداع
+                            </Button>
+                            <Button onClick={() => { setWalletActionType('withdrawal'); setIsWalletDialogOpen(true); }} variant="outline" className="gap-2 border-red-500/20 hover:bg-red-500/10 text-red-500">
+                                <ArrowUpRight className="w-4 h-4" />
+                                سحب
+                            </Button>
+                        </div>
+                    </div>
+                </GlassCard>
+            </motion.div>
+
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <motion.div variants={itemVariant}>
@@ -203,11 +273,50 @@ export const UserProfileClient = ({
             {/* Tabs Section */}
             <motion.div variants={itemVariant} className="mt-8">
                 <Tabs defaultValue="orders" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 mb-8">
+                    <TabsList className="grid w-full grid-cols-4 mb-8">
                         <TabsTrigger value="orders">الطلبات</TabsTrigger>
+                        <TabsTrigger value="wallet">المحفظة</TabsTrigger>
                         <TabsTrigger value="transactions">المعاملات المالية</TabsTrigger>
                         <TabsTrigger value="deposits">سجل العربون</TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="wallet">
+                        <GlassCard className="h-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <Wallet className="w-5 h-5 text-emerald-500" />
+                                    سجل المحفظة
+                                </h3>
+                            </div>
+
+                            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                                {walletTransactions && walletTransactions.length > 0 ? (
+                                    walletTransactions.map((tx) => (
+                                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 mb-3 border border-transparent hover:border-primary/10">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${tx.type === 'deposit' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                                                    {tx.type === 'deposit' ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-sm">{tx.description}</h4>
+                                                    <p className="text-[10px] text-muted-foreground">{new Date(tx.createdAt).toLocaleString('ar-LY')}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-left">
+                                                <p className={`font-bold ${tx.type === 'deposit' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                                    {tx.type === 'deposit' ? '+' : '-'}{tx.amount.toLocaleString()} د.ل
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <p className="text-muted-foreground">لا توجد حركات في المحفظة</p>
+                                    </div>
+                                )}
+                            </div>
+                        </GlassCard>
+                    </TabsContent>
 
                     <TabsContent value="orders">
                         <GlassCard className="h-full">
@@ -347,6 +456,41 @@ export const UserProfileClient = ({
                         </GlassCard>
                     </TabsContent>
                 </Tabs>
+                <Dialog open={isWalletDialogOpen} onOpenChange={setIsWalletDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>{walletActionType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد'}</DialogTitle>
+                            <DialogDescription>
+                                {walletActionType === 'deposit' ? 'أدخل المبلغ المراد إيداعه في محفظة العميل' : 'أدخل المبلغ المراد سحبه من محفظة العميل'}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label>المبلغ</Label>
+                                <Input
+                                    type="number"
+                                    placeholder="0.00"
+                                    value={walletAmount}
+                                    onChange={(e) => setWalletAmount(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>ملاحظات (اختياري)</Label>
+                                <Input
+                                    placeholder="وصف العملية..."
+                                    value={walletDescription}
+                                    onChange={(e) => setWalletDescription(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsWalletDialogOpen(false)}>إلغاء</Button>
+                            <Button onClick={handleWalletAction} disabled={isSubmittingWallet}>
+                                {isSubmittingWallet ? 'جاري التنفيذ...' : 'تأكيد'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </motion.div>
         </motion.div>
     );

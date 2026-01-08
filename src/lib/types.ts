@@ -18,6 +18,7 @@ export interface User {
   address?: string; // Added address field
   orderCount: number;
   debt: number;
+  walletBalance?: number;
   orderCounter?: number; // Counter for sequential order numbers
 }
 
@@ -178,6 +179,7 @@ export interface AppSettings {
   exchangeRate: number;
   pricePerKiloLYD: number;
   pricePerKiloUSD: number;
+  customerPricePerKiloUSD?: number;
 }
 
 export interface SystemSettings {
@@ -306,4 +308,15 @@ export interface TreasuryTransaction {
   description: string;
   relatedOrderId?: string;
   createdAt: string; // ISO
+}
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'deposit' | 'withdrawal';
+  description: string;
+  relatedOrderId?: string;
+  createdAt: string; // ISO
+  managerId?: string;
 }

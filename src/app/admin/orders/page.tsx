@@ -55,7 +55,7 @@ import {
   Package, Search, PlusCircle, Filter, MoreHorizontal,
   Edit, Trash2, Printer, MapPin, CheckCircle, Clock,
   DollarSign, Truck, Building, Plane, UserPlus, UserX,
-  Copy, Loader2, X
+  Copy, Loader2, X, Sparkles
 } from "lucide-react";
 
 // Types & Actions
@@ -106,6 +106,9 @@ export default function AdminOrdersPage() {
   // Dialogs
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+
+  const [quickEditOpen, setQuickEditOpen] = useState(false);
+  const [orderToQuickEdit, setOrderToQuickEdit] = useState<Order | null>(null);
 
   // -- Data Fetching --
   const fetchData = useCallback(async () => {
@@ -188,6 +191,21 @@ export default function AdminOrdersPage() {
       toast({ title: "تم التحديث", description: "تم تغيير حالة الطلب بنجاح" });
     } else {
       toast({ title: "خطأ", description: "فشل تحديث الحالة", variant: "destructive" });
+    }
+  };
+
+  const handleQuickEditClick = (order: Order) => {
+    setOrderToQuickEdit(order);
+    setQuickEditOpen(true);
+  };
+
+  const handleQuickEditSave = async (orderId: string, updates: Partial<Order>) => {
+    const success = await updateOrder(orderId, updates);
+    if (success) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+      toast({ title: "تم التحديث", description: "تم تعديل البيانات بنجاح" });
+    } else {
+      toast({ title: "خطأ", description: "فشل حفظ التعديلات", variant: "destructive" });
     }
   };
 
@@ -402,7 +420,11 @@ export default function AdminOrdersPage() {
                               <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
                               <DropdownMenuItem onClick={() => router.push(`/admin/orders/add?id=${order.id}`)}>
                                 <Edit className="h-4 w-4 ml-2" />
-                                تعديل الطلب
+                                تعديل كامل
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleQuickEditClick(order)}>
+                                <Sparkles className="h-4 w-4 ml-2" />
+                                تعديل سريع
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => window.open(`/admin/orders/${order.id}/print`, '_blank')}>
                                 <Printer className="h-4 w-4 ml-2" />
@@ -473,6 +495,87 @@ export default function AdminOrdersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Quick Edit Dialog */}
+      <QuickEditDialog
+        open={quickEditOpen}
+        onOpenChange={setQuickEditOpen}
+        order={orderToQuickEdit}
+        onSave={handleQuickEditSave}
+      />
+
     </div>
+  );
+}
+
+// --- Quick Edit Dialog Component ---
+function QuickEditDialog({ open, onOpenChange, order, onSave }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: Order | null;
+  onSave: (orderId: string, updates: Partial<Order>) => Promise<void>;
+}) {
+  const [purchasePriceUSD, setPurchasePriceUSD] = useState(0);
+  const [trackingId, setTrackingId] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (order) {
+      setPurchasePriceUSD(order.purchasePriceUSD || 0);
+      setTrackingId(order.trackingId || '');
+    }
+  }, [order]);
+
+  const handleSave = async () => {
+    if (!order) return;
+    setIsSaving(true);
+    await onSave(order.id, {
+      purchasePriceUSD,
+      trackingId
+    });
+    setIsSaving(false);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl">
+        <DialogHeader>
+          <DialogTitle>تعديل سريع</DialogTitle>
+          <DialogDescription>
+            تعديل بيانات {order?.invoiceNumber} المختصرة
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="quick-price" className="text-right">سعر الشراء ($)</Label>
+            <Input
+              id="quick-price"
+              type="number"
+              value={purchasePriceUSD}
+              onChange={(e) => setPurchasePriceUSD(parseFloat(e.target.value) || 0)}
+              className="col-span-3 text-left"
+              dir="ltr"
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="quick-tracking" className="text-right">كود التتبع</Label>
+            <Input
+              id="quick-tracking"
+              value={trackingId}
+              onChange={(e) => setTrackingId(e.target.value.toUpperCase())}
+              className="col-span-3 text-left"
+              dir="ltr"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button type="submit" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            حفظ التعديلات
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

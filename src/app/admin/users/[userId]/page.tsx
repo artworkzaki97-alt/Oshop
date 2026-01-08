@@ -2,7 +2,7 @@
 // src/app/admin/users/[userId]/page.tsx
 import React, { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { getUserById, getOrdersByUserId, getTransactionsByUserId, getDepositsByUserId } from '@/lib/actions';
+import { getUserById, getOrdersByUserId, getTransactionsByUserId, getDepositsByUserId, getWalletTransactions } from '@/lib/actions';
 import { UserProfileClient } from './UserProfileClient';
 import { Loader2 } from 'lucide-react';
 
@@ -15,10 +15,11 @@ const UserProfilePage = async ({ params }: { params: { userId: string } }) => {
         notFound();
     }
 
-    const [orders, transactions, deposits] = await Promise.all([
+    const [orders, transactions, deposits, walletTransactions] = await Promise.all([
         getOrdersByUserId(userId),
         getTransactionsByUserId(userId),
         getDepositsByUserId(userId),
+        getWalletTransactions(userId),
     ]);
 
     const totalOrdersValue = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.sellingPriceLYD, 0);
@@ -33,6 +34,7 @@ const UserProfilePage = async ({ params }: { params: { userId: string } }) => {
             orders={orders}
             transactions={transactions}
             deposits={deposits}
+            walletTransactions={walletTransactions}
             totalOrdersValue={totalOrdersValue}
             totalOrdersCount={totalOrdersCount}
             totalDebt={totalDebt}
