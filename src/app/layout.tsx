@@ -48,11 +48,11 @@ export default function RootLayout({
 }>) {
 
   return (
-    <html lang="ar" dir="rtl" className={cairo.variable}>
+    <html lang="ar" dir="rtl" className={cairo.variable} suppressHydrationWarning>
       <head>
         {/* Next.js will automatically handle the favicon if it's placed in the app directory. */}
       </head>
-      <body className={cn("min-h-screen bg-background font-sans antialiased")}>
+      <body className={cn("min-h-screen bg-background font-sans antialiased")} suppressHydrationWarning>
         {children}
         <Toaster />
       </body>

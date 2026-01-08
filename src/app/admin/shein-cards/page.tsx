@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, Calendar } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { SheinCard } from '@/lib/types';
-import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard } from '@/lib/actions';
+import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, addTreasuryTransaction } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -22,6 +22,10 @@ export default function SheinCardsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'used' | 'expired'>('all');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isTreasuryDialogOpen, setIsTreasuryDialogOpen] = useState(false);
+    const [treasuryBalance, setTreasuryBalance] = useState(0);
+    const [treasuryAmount, setTreasuryAmount] = useState('');
+    const [treasuryNote, setTreasuryNote] = useState('');
     const [isSaving, setIsSaving] = useState(false);
 
     // Form State
@@ -38,8 +42,12 @@ export default function SheinCardsPage() {
 
     const fetchCards = async () => {
         setIsLoading(true);
-        const data = await getSheinCards();
+        const [data, balance] = await Promise.all([
+            getSheinCards(),
+            getTreasuryBalance()
+        ]);
         setCards(data);
+        setTreasuryBalance(balance);
         setIsLoading(false);
     };
 
@@ -118,18 +126,24 @@ export default function SheinCardsPage() {
     }, [cards, searchQuery, statusFilter]);
 
     // Summary Stats
-    const totalAvailableValue = cards.filter(c => c.status === 'available').reduce((sum, c) => sum + c.value, 0);
+    const totalAvailableValue = cards.filter(c => c.status === 'available').reduce((sum, c) => sum + (c.remainingValue ?? c.value), 0);
     const totalCardsCount = cards.length;
     const availableCardsCount = cards.filter(c => c.status === 'available').length;
 
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <h1 className="text-3xl font-bold tracking-tight">إدارة بطاقات Shein</h1>
-                <Button onClick={() => handleOpenDialog()}>
-                    <Plus className="w-4 h-4 ml-2" />
-                    إضافة بطاقة جديدة
-                </Button>
+                <h1 className="text-3xl font-bold tracking-tight">إدارة البطاقات والخزينة</h1>
+                <div className="flex gap-2">
+                    <Button onClick={() => setIsTreasuryDialogOpen(true)} variant="secondary" className="gap-2">
+                        <DollarSign className="w-4 h-4" />
+                        إضافة رصيد USDT
+                    </Button>
+                    <Button onClick={() => handleOpenDialog()}>
+                        <Plus className="w-4 h-4 ml-2" />
+                        إضافة بطاقة جديدة
+                    </Button>
+                </div>
             </div>
 
             {/* Summary Cards */}
@@ -162,6 +176,16 @@ export default function SheinCardsPage() {
                     <CardContent>
                         <div className="text-2xl font-bold">{totalCardsCount}</div>
                         <p className="text-xs text-muted-foreground">مجموع الكل (متاح + مستخدم)</p>
+                    </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">خزينة USDT</CardTitle>
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-green-800 dark:text-green-200">{treasuryBalance.toFixed(2)} $</div>
+                        <p className="text-xs text-green-600/80 dark:text-green-400">الرصيد النقدي المتاح</p>
                     </CardContent>
                 </Card>
             </div>
@@ -223,7 +247,14 @@ export default function SheinCardsPage() {
                                     filteredCards.map((card) => (
                                         <TableRow key={card.id} className={card.status === 'used' ? 'bg-muted/30' : ''}>
                                             <TableCell className="font-mono font-medium dir-ltr text-right">{card.code}</TableCell>
-                                            <TableCell className="text-center font-bold text-green-600 dir-ltr">{card.value.toFixed(2)}</TableCell>
+                                            <TableCell className="text-center font-bold text-green-600 dir-ltr">
+                                                {(card.remainingValue ?? card.value).toFixed(2)}
+                                                {card.remainingValue !== undefined && card.remainingValue < card.value && (
+                                                    <span className="text-xs text-muted-foreground block line-through decoration-red-500/50">
+                                                        {card.value.toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </TableCell>
                                             <TableCell className="text-center">
                                                 <Badge variant={card.status === 'available' ? 'default' : card.status === 'used' ? 'secondary' : 'destructive'}>
                                                     {card.status === 'available' ? 'متاح' : card.status === 'used' ? 'مستخدم' : 'منتهي'}
@@ -298,6 +329,64 @@ export default function SheinCardsPage() {
                         <Button onClick={handleSave} disabled={isSaving}>
                             {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                             حفظ
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isTreasuryDialogOpen} onOpenChange={setIsTreasuryDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>إضافة رصيد للخزينة (USDT)</DialogTitle>
+                        <DialogDescription>
+                            أدخل المبلغ الذي تود إيداعه في الخزينة.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>المبلغ ($)</Label>
+                            <Input
+                                type="number"
+                                step="0.01"
+                                value={treasuryAmount}
+                                onChange={(e) => setTreasuryAmount(e.target.value)}
+                                placeholder="0.00"
+                                dir="ltr"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>الملاحظات (اختياري)</Label>
+                            <Input
+                                value={treasuryNote}
+                                onChange={(e) => setTreasuryNote(e.target.value)}
+                                placeholder="سبب الإيداع..."
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsTreasuryDialogOpen(false)}>إلغاء</Button>
+                        <Button onClick={async () => {
+                            if (!treasuryAmount) return;
+                            setIsSaving(true);
+                            try {
+                                await addTreasuryTransaction({
+                                    amount: parseFloat(treasuryAmount),
+                                    type: 'deposit',
+                                    description: treasuryNote || 'إيداع يدوي',
+                                });
+                                toast({ title: "تم الإيداع", description: "تم إضافة الرصيد بنجاح" });
+                                setIsTreasuryDialogOpen(false);
+                                setTreasuryAmount('');
+                                setTreasuryNote('');
+                                fetchCards();
+                            } catch (e) {
+                                toast({ title: "خطأ", description: "فشل الإيداع", variant: "destructive" });
+                            } finally {
+                                setIsSaving(false);
+                            }
+                        }} disabled={isSaving}>
+                            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            إيداع
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -22,8 +22,8 @@ import {
     addOrder,
     updateOrder,
     getGlobalSites,
-    findBestSheinCards,
-    useSheinCards,
+    getAvailableSheinCards,
+    processCostDeduction,
     addExpense,
     getAppSettings,
     getOrderById,
@@ -89,11 +89,9 @@ const AddOrderForm = () => {
     const [imageUrls, setImageUrls] = useState<string[]>([]);
 
     // Deduction Logic State
-    const [deductionMethod, setDeductionMethod] = useState<'manual' | 'shein_cards' | 'usdt_treasury'>('manual');
-    const [suggestedCards, setSuggestedCards] = useState<SheinCard[]>([]);
-    const [cardCoveredAmount, setCardCoveredAmount] = useState<number>(0);
-    const [cardRemainingAmount, setCardRemainingAmount] = useState<number>(0);
-    const [isAnalyzingCards, setIsAnalyzingCards] = useState<boolean>(false);
+    const [availableCards, setAvailableCards] = useState<SheinCard[]>([]);
+    const [selectedCardId, setSelectedCardId] = useState<string>('none');
+    const [isAnalyzingCards, setIsAnalyzingCards] = useState<boolean>(false); // Keep for loading state if needed
 
     const [isUploading, setIsUploading] = useState(false);
 
@@ -111,15 +109,17 @@ const AddOrderForm = () => {
         const fetchInitialData = async () => {
             setIsUsersLoading(true);
             try {
-                const [fetchedUsers, settings, fetchedTempOrders, fetchedSites] = await Promise.all([
+                const [fetchedUsers, settings, fetchedTempOrders, fetchedSites, fetchedCards] = await Promise.all([
                     getUsers(),
                     getAppSettings(),
                     getTempOrders(),
                     getGlobalSites(),
+                    getAvailableSheinCards()
                 ]);
                 setUsers(fetchedUsers);
                 setAppSettings(settings);
                 setGlobalSites(fetchedSites);
+                setAvailableCards(fetchedCards);
                 // Filter out temp orders that have already been converted
                 setTempOrders(fetchedTempOrders.filter(o => !o.parentInvoiceId));
 
@@ -321,21 +321,7 @@ const AddOrderForm = () => {
         setImageUrls(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleAnalyzeCards = async () => {
-        setIsAnalyzingCards(true);
-        try {
-            const result = await findBestSheinCards(purchasePriceUSD);
-            setSuggestedCards(result.cards);
-            setCardCoveredAmount(result.coveredAmount);
-            setCardRemainingAmount(result.remainingAmount);
-            toast({ title: "تم تحليل البطاقات", description: `تم العثور على ${result.cards.length} بطاقة تغطي ${result.coveredAmount}$` });
-        } catch (error) {
-            console.error(error);
-            toast({ title: "خطأ", description: "فشل في تحليل البطاقات", variant: "destructive" });
-        } finally {
-            setIsAnalyzingCards(false);
-        }
-    };
+
 
     const handleSaveOrder = async () => {
         setIsSaving(true);
@@ -410,25 +396,12 @@ const AddOrderForm = () => {
                     throw new Error("Failed to add order in the form.");
                 }
 
-                // --- SMART DEDUCTION LOGIC ---
-                if (deductionMethod === 'shein_cards' && suggestedCards.length > 0) {
-                    await useSheinCards(suggestedCards.map(c => c.id), savedOrder.id);
-                    if (cardRemainingAmount > 0) {
-                        // Create Expense for remainder
-                        await addExpense({
-                            description: `Cost for Order #${savedOrder.invoiceNumber} (Partial via Shein Remainder)`,
-                            amount: cardRemainingAmount,
-                            date: new Date().toISOString(),
-                            managerId: undefined // We don't have it here yet
-                        });
-                    }
-                } else if (deductionMethod === 'usdt_treasury') {
-                    await addExpense({
-                        description: `Cost of Goods - Order #${savedOrder.invoiceNumber}`,
-                        amount: purchasePriceUSD,
-                        date: new Date().toISOString(),
-                        managerId: undefined
-                    });
+                // --- HYBRID DEDUCTION LOGIC ---
+                try {
+                    await processCostDeduction(savedOrder.id, savedOrder.invoiceNumber, purchasePriceUSD, selectedCardId);
+                } catch (deductError) {
+                    console.error("Deduction Error:", deductError);
+                    toast({ title: "تحذير", description: "تم حفظ الطلب لكن فشل خصم التكلفة.", variant: "destructive" });
                 }
                 // -----------------------------
 
@@ -442,9 +415,13 @@ const AddOrderForm = () => {
 
             router.push('/admin/orders');
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to save order:", error);
-            toast({ title: "حدث خطأ", description: "فشل حفظ العملية.", variant: "destructive" });
+            toast({
+                title: "حدث خطأ",
+                description: error.message || "فشل حفظ العملية.",
+                variant: "destructive"
+            });
         } finally {
             setIsSaving(false);
         }
@@ -733,77 +710,57 @@ const AddOrderForm = () => {
                     </div>
                 </FormSection>
 
-                <FormSection title="خصم التكلفة (Treasury)">
+                <FormSection title="خصم التكلفة (Hybrid: Shein + Treasury)">
                     <div className="space-y-4">
-                        <FormField label="طريقة خصم التكلفة" id="deduction-method">
-                            <RadioGroup value={deductionMethod} onValueChange={(val: any) => setDeductionMethod(val)} className="flex flex-wrap gap-4 pt-2">
-                                <div className="flex items-center space-x-2 space-x-reverse border p-3 rounded-md has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                                    <RadioGroupItem value="manual" id="dm-manual" />
-                                    <Label htmlFor="dm-manual" className="cursor-pointer">يدوي / لا يوجد خصم</Label>
-                                </div>
-                                <div className="flex items-center space-x-2 space-x-reverse border p-3 rounded-md has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                                    <RadioGroupItem value="usdt_treasury" id="dm-treasury" />
-                                    <Label htmlFor="dm-treasury" className="cursor-pointer">خزينة USDT (إضافة مصروف)</Label>
-                                </div>
-                                <div className="flex items-center space-x-2 space-x-reverse border p-3 rounded-md has-[:checked]:bg-primary/5 has-[:checked]:border-primary">
-                                    <RadioGroupItem value="shein_cards" id="dm-shein" />
-                                    <Label htmlFor="dm-shein" className="cursor-pointer">بطاقات Shein (خصم آلي)</Label>
-                                </div>
-                            </RadioGroup>
-                        </FormField>
+                        <div className="space-y-2">
+                            <Label>استخدام بطاقة Shein (اختياري)</Label>
+                            <Select value={selectedCardId} onValueChange={setSelectedCardId}>
+                                <SelectTrigger className="w-full text-left font-mono" dir="ltr">
+                                    <SelectValue placeholder="اختر بطاقة..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">بدون بطاقة (خصم كامل من الخزينة)</SelectItem>
+                                    {availableCards.map(card => (
+                                        <SelectItem key={card.id} value={card.id}>
+                                            {card.code} | Bal: {(card.remainingValue ?? card.value).toFixed(2)}$
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                        {deductionMethod === 'shein_cards' && (
-                            <div className="bg-muted/30 p-4 rounded-lg border border-dashed space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h4 className="font-semibold text-sm">تحليل البطاقات المقترحة</h4>
-                                        <p className="text-xs text-muted-foreground">سيتم اختيار أنسب البطاقات لتغطية مبلغ {purchasePriceUSD}$</p>
-                                    </div>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="secondary"
-                                        className="gap-2"
-                                        onClick={handleAnalyzeCards}
-                                        disabled={isAnalyzingCards || purchasePriceUSD <= 0}
-                                    >
-                                        {isAnalyzingCards ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                        تحليل البطاقات
-                                    </Button>
-                                </div>
-
-                                {suggestedCards.length > 0 && (
-                                    <div className="space-y-3 animation-in slide-in-from-top-2 fade-in">
-                                        <div className="border rounded-md bg-background overflow-hidden">
-                                            <table className="w-full text-xs">
-                                                <thead className="bg-muted text-muted-foreground">
-                                                    <tr>
-                                                        <th className="p-2 text-right">الكود</th>
-                                                        <th className="p-2 text-left">القيمة</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y">
-                                                    {suggestedCards.map(card => (
-                                                        <tr key={card.id}>
-                                                            <td className="p-2 font-mono">{card.code}</td>
-                                                            <td className="p-2 text-left font-bold">{card.value}$</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        <div className="flex items-center justify-between text-sm pt-2 border-t font-medium">
-                                            <span>المبلغ المغطى: <span className="text-green-600">{cardCoveredAmount}$</span></span>
-                                            <span>المتبقي (USDT): <span className="text-orange-600">{cardRemainingAmount}$</span></span>
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 text-destructive">
-                                            <AlertCircle className="w-3 h-3" />
-                                            تنبيه: سيتم وضع علامة "مستخدم" على هذه البطاقات عند الحفظ.
-                                        </p>
-                                    </div>
-                                )}
+                        {/* Breakdown Display */}
+                        <div className="bg-muted/30 p-3 rounded-md text-sm space-y-1 font-mono" dir="ltr">
+                            <div className="flex justify-between">
+                                <span>Total Cost:</span>
+                                <span className="font-bold">{purchasePriceUSD.toFixed(2)} $</span>
                             </div>
-                        )}
+                            {selectedCardId !== 'none' && (() => {
+                                const card = availableCards.find(c => c.id === selectedCardId);
+                                const balance = card?.remainingValue ?? card?.value ?? 0;
+                                const deduct = Math.min(balance, purchasePriceUSD);
+                                return (
+                                    <div className="flex justify-between text-green-600">
+                                        <span>From Card ({card?.code.substring(0, 4)}...):</span>
+                                        <span>- {deduct.toFixed(2)} $</span>
+                                    </div>
+                                );
+                            })()}
+                            <div className="flex justify-between text-blue-600 border-t pt-1 mt-1">
+                                <span>From Treasury:</span>
+                                <span className="font-bold">
+                                    {(() => {
+                                        const card = availableCards.find(c => c.id === selectedCardId);
+                                        const balance = selectedCardId !== 'none' ? (card?.remainingValue ?? card?.value ?? 0) : 0;
+                                        const fromTreasury = Math.max(0, purchasePriceUSD - Math.min(balance, purchasePriceUSD));
+                                        return fromTreasury.toFixed(2);
+                                    })()} $
+                                </span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-right" dir="rtl">
+                            * سيتم خصم المبلغ من البطاقة أولاً، ثم استكمال الباقي من خزينة USDT تلقائياً.
+                        </p>
                     </div>
                 </FormSection>
 

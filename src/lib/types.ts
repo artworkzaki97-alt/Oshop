@@ -296,4 +296,14 @@ export interface SheinCard {
   usedAt?: string; // ISO
   usedForOrderId?: string;
   notes?: string;
+  remainingValue?: number; // For partial usage
+}
+
+export interface TreasuryTransaction {
+  id: string;
+  amount: number;
+  type: 'deposit' | 'withdrawal';
+  description: string;
+  relatedOrderId?: string;
+  createdAt: string; // ISO
 }

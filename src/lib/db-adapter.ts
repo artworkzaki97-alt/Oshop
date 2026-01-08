@@ -65,13 +65,19 @@ export const dbAdapter = {
                 };
             },
             set: async (data: any, options?: { merge: boolean }) => {
-                if (options?.merge) {
-                    const { error } = await supabase.from(collectionName).upsert({ ...data, id });
-                    if (error) throw error;
-                } else {
-                    const { error } = await supabase.from(collectionName).upsert({ ...data, id });
-                    if (error) throw error;
+                // Upsert and return the saved data
+                const { data: savedData, error } = await supabase
+                    .from(collectionName)
+                    .upsert({ ...data, id })
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error(`Error in set() for ${collectionName}/${id}:`, error);
+                    throw error;
                 }
+
+                return savedData;
             },
             update: async (data: any) => {
                 // Usage often includes __op: increment etc.
@@ -174,10 +180,15 @@ export const dbAdapter = {
                 return docRef.get();
             },
             set: async (docRef: any, data: any, options?: any) => {
+                console.log("🟢 [Transaction.set] docRef:", docRef?.id || docRef?.path, "data keys:", Object.keys(data || {}));
                 // If docRef is a promise (from previous logic?), await it? 
                 // Our doc() returns an object immediately.
                 if (docRef.set) {
                     await docRef.set(data, options);
+                    console.log("🟢 [Transaction.set] Success");
+                } else {
+                    console.error("🔴 [Transaction.set] ERROR: docRef.set is not a function!", docRef);
+                    throw new Error("docRef.set is not a function");
                 }
             },
             update: async (docRef: any, data: any) => {

@@ -37,13 +37,15 @@ CREATE TABLE IF NOT EXISTS shein_cards_v4 (
   id TEXT PRIMARY KEY DEFAULT uuid_generate_v4(),
   code TEXT UNIQUE,
   value FLOAT,
+  "remainingValue" FLOAT,
   currency TEXT DEFAULT 'USD',
   status TEXT CHECK (status IN ('available', 'used', 'expired')),
   "purchaseDate" TEXT, -- ISO String
   "expiryDate" TEXT,
   "usedAt" TEXT,
   "usedForOrderId" TEXT,
-  notes TEXT
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 5. Products/Inventory Table (Inventory Phase)
@@ -145,7 +147,8 @@ CREATE TABLE IF NOT EXISTS orders_v4 (
   "siteId" TEXT,
   
   -- Phase 10 Updates
-  "managerId" TEXT
+  "managerId" TEXT,
+  "sequenceNumber" INTEGER
 );
 
 -- 9. Transactions Table
