@@ -76,31 +76,54 @@ const BulkPrintContent = () => {
                    @page {
                         margin: 0;
                     }
-                    .page-break {
-                        page-break-after: always;
-                        break-after: page;
+                    
+                    /* Reset global print styles that cause conflicts */
+                    body * {
+                        visibility: visible !important;
+                        position: static !important;
                     }
+                    
                     .no-print {
                         display: none !important;
                     }
+                    
                     body {
-                        background-color: white;
+                        background-color: white !important;
                     }
+                    
+                    /* Bulk print specific wrapper */
+                    .bulk-print-wrapper {
+                        display: block !important;
+                        width: 100% !important;
+                    }
+                    
                     .printable-wrapper {
-                        width: 100%;
-                        height: 100vh;
-                        page-break-after: always;
-                        break-after: page;
-                        display: flex;
-                        flex-direction: column;
+                        width: 100% !important;
+                        page-break-after: always !important;
+                        break-after: page !important;
+                        display: block !important;
+                        position: relative !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                     }
-                    .printable-content {
-                        box-shadow: none;
-                        border: none;
-                        margin: 0;
-                        padding: 0;
-                        width: 100%;
-                        flex-grow: 1;
+                    
+                    .printable-wrapper:last-child {
+                        page-break-after: auto !important;
+                        break-after: auto !important;
+                    }
+                    
+                    /* Override the problematic global .printable-content class */
+                    .bulk-print-content {
+                        position: static !important;
+                        left: auto !important;
+                        top: auto !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
                     }
                 }
             `}</style>
@@ -137,10 +160,10 @@ const BulkPrintContent = () => {
                 </div>
             </div>
 
-            <div className="mx-auto w-full max-w-[210mm]">
+            <div className="mx-auto w-full max-w-[210mm] bulk-print-wrapper">
                 {orders.map((order, index) => (
                     <div key={order.id} className="mb-8 print:mb-0 printable-wrapper">
-                        <div className="printable-content bg-white h-full">
+                        <div className="bulk-print-content bg-white h-full">
                             <PrintableInvoice
                                 labelData={order}
                                 customValue={customValues[order.id]}
