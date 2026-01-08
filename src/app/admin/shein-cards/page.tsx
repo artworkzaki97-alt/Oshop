@@ -8,8 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, Calendar } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { SheinCard } from '@/lib/types';
-import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, addTreasuryTransaction } from '@/lib/actions';
+import { SheinCard, TreasuryCard } from '@/lib/types';
+import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, addTreasuryTransaction, getTreasuryCards } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -27,6 +27,7 @@ export default function SheinCardsPage() {
     const [treasuryAmount, setTreasuryAmount] = useState('');
     const [treasuryNote, setTreasuryNote] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    const [treasuryCards, setTreasuryCards] = useState<TreasuryCard[]>([]);
 
     // Form State
     const [currentCardId, setCurrentCardId] = useState<string | null>(null);
@@ -42,12 +43,14 @@ export default function SheinCardsPage() {
 
     const fetchCards = async () => {
         setIsLoading(true);
-        const [data, balance] = await Promise.all([
+        const [data, balance, tCards] = await Promise.all([
             getSheinCards(),
-            getTreasuryBalance()
+            getTreasuryBalance(),
+            getTreasuryCards()
         ]);
         setCards(data);
         setTreasuryBalance(balance);
+        setTreasuryCards(tCards);
         setIsLoading(false);
     };
 
@@ -188,6 +191,27 @@ export default function SheinCardsPage() {
                         <p className="text-xs text-green-600/80 dark:text-green-400">الرصيد النقدي المتاح</p>
                     </CardContent>
                 </Card>
+            </div>
+
+            {/* Treasury Cards Section */}
+            <div className="mt-6">
+                <h2 className="text-2xl font-bold mb-4">بطاقات الخزينة</h2>
+                <div className="grid gap-4 md:grid-cols-3">
+                    {treasuryCards.map(card => (
+                        <Card key={card.id} className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">{card.name}</CardTitle>
+                                <DollarSign className="h-4 w-4 text-blue-600" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+                                    {card.balance.toFixed(2)} {card.currency === 'LYD' ? 'د.ل' : '$'}
+                                </div>
+                                <p className="text-xs text-blue-600/80 dark:text-blue-400">الرصيد الحالي</p>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
             </div>
 
             <Card>

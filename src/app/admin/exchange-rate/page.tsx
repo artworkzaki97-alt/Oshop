@@ -33,11 +33,11 @@ const ExchangeRatePage = () => {
 
     const handleSave = async () => {
         setIsSaving(true);
-        
-        const settingsToSave: AppSettings = {
+
+        const settingsToSave: Partial<AppSettings> = {
             exchangeRate: Number(settings.exchangeRate) || 0,
-            pricePerKiloLYD: Number(settings.pricePerKiloLYD) || 0,
             pricePerKiloUSD: Number(settings.pricePerKiloUSD) || 0,
+            customerPricePerKiloUSD: Number(settings.customerPricePerKiloUSD) || 0,
         };
 
         const success = await updateAppSettings(settingsToSave);
@@ -55,7 +55,7 @@ const ExchangeRatePage = () => {
         }
         setIsSaving(false);
     };
-    
+
     if (isLoading) {
         return (
             <div className="flex h-screen items-center justify-center">
@@ -91,17 +91,17 @@ const ExchangeRatePage = () => {
                                 </p>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="pricePerKiloLYD">سعر الكيلوغرام الافتراضي (للزبون بالدينار)</Label>
+                                <Label htmlFor="customerPricePerKiloUSD">سعر الكيلوغرام الافتراضي (للزبون بالدولار)</Label>
                                 <Input
-                                    id="pricePerKiloLYD"
+                                    id="customerPricePerKiloUSD"
                                     type="number"
                                     step="0.01"
-                                    value={settings.pricePerKiloLYD || ''}
+                                    value={settings.customerPricePerKiloUSD || ''}
                                     onChange={handleInputChange}
                                     dir="ltr"
                                 />
-                                 <p className="text-xs text-muted-foreground">
-                                    السعر الافتراضي الذي يضاف على فاتورة الزبون لكل كيلوغرام.
+                                <p className="text-xs text-muted-foreground">
+                                    السعر الافتراضي بالدولار الذي يضاف على فاتورة الزبون لكل كيلوغرام.
                                 </p>
                             </div>
                             <div className="space-y-2">
@@ -114,11 +114,11 @@ const ExchangeRatePage = () => {
                                     onChange={handleInputChange}
                                     dir="ltr"
                                 />
-                                 <p className="text-xs text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                     التكلفة الفعلية للشحن على الشركة لكل كيلوغرام بالدولار.
                                 </p>
                             </div>
-                             <Button type="submit" disabled={isSaving}>
+                            <Button type="submit" disabled={isSaving}>
                                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                 حفظ التغييرات
                             </Button>

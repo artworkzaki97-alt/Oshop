@@ -82,7 +82,7 @@ export interface Order {
   addedCostUSD?: number;
   addedCostNotes?: string;
   store?: string;
-  paymentMethod?: string;
+  paymentMethod?: 'cash' | 'card' | 'cash_dollar';
   deliveryDate?: string | null; // ISO String
   itemDescription?: string;
   shippingCostLYD?: number;
@@ -299,6 +299,16 @@ export interface SheinCard {
   usedForOrderId?: string;
   notes?: string;
   remainingValue?: number; // For partial usage
+}
+
+export interface TreasuryCard {
+  id: string;
+  name: string; // "كاش ليبي", "مصرف", "دولار كاش"
+  type: 'cash_libyan' | 'bank' | 'cash_dollar';
+  balance: number; // in LYD for first two, USD for last one
+  currency: 'LYD' | 'USD';
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
 export interface TreasuryTransaction {

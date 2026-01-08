@@ -10,13 +10,14 @@ import { supabaseAdmin } from "./supabase-admin";
 import {
     Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification,
     AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel,
-    SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard, TreasuryTransaction, WalletTransaction
+    SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard, TreasuryTransaction, WalletTransaction, TreasuryCard
 } from "./types";
 
 // ... (existing code)
 
 const SHEIN_CARDS_COLLECTION = 'shein_cards_v4';
 const TREASURY_COLLECTION = 'treasury_transactions_v4';
+const TREASURY_CARDS_COLLECTION = 'treasury_cards_v4';
 
 // Map adapter methods to Firebase names for minimal code changes
 const db = dbAdapter;
@@ -199,39 +200,90 @@ export async function getAppSettings(): Promise<AppSettings> {
 
 export async function getSystemSettings(): Promise<SystemSettings> {
     try {
-        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
-        const docSnap = await getDoc(settingsRef);
+        const { data, error } = await supabaseAdmin
+            .from('system_settings_v4')
+            .select('*')
+            .limit(1)
+            .single();
 
-        const defaults: SystemSettings = {
-            id: 'main',
-            exchangeRate: 1,
-            shippingCostUSD: 4.5,
-            shippingPriceUSD: 5.0,
-        };
-
-        if (docSnap.exists()) {
-            const data = docSnap.data();
+        if (error) {
+            console.error("Error fetching system settings:", error);
+            // Return defaults if no settings found
             return {
-                id: 'main',
-                exchangeRate: data.exchangeRate ?? defaults.exchangeRate,
-                shippingCostUSD: data.shippingCostUSD ?? defaults.shippingCostUSD,
-                shippingPriceUSD: data.shippingPriceUSD ?? defaults.shippingPriceUSD,
+                exchangeRate: 5.0,
+                shippingCostUSD: 4.5,
+                shippingPriceUSD: 5.0
             };
-        } else {
-            // If the document doesn't exist, create it with default values
-            await setDoc(settingsRef, defaults);
-            return defaults;
         }
+
+        return {
+            exchangeRate: data.exchangeRate || 5.0,
+            shippingCostUSD: data.shippingCostUSD || 4.5,
+            shippingPriceUSD: data.shippingPriceUSD || 5.0
+        };
     } catch (error) {
-        console.error("Error getting system settings:", error);
-        return { id: 'main', exchangeRate: 1, shippingCostUSD: 4.5, shippingPriceUSD: 5.0 };
+        console.error("Error in getSystemSettings:", error);
+        return {
+            exchangeRate: 5.0,
+            shippingCostUSD: 4.5,
+            shippingPriceUSD: 5.0
+        };
     }
 }
 
+
 export async function updateSystemSettings(data: Partial<SystemSettings>): Promise<boolean> {
     try {
-        const settingsRef = doc(db, SETTINGS_COLLECTION, 'main');
-        await setDoc(settingsRef, data, { merge: true });
+        // Check if settings row exists
+        const { data: existing, error: fetchError } = await supabaseAdmin
+            .from('system_settings_v4')
+            .select('id')
+            .limit(1)
+            .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows
+            console.error("Error fetching system settings:", fetchError);
+        }
+
+        // Build update object with correct field names
+        const updateData: any = {
+            updatedAt: new Date().toISOString()
+        };
+
+        if (data.exchangeRate !== undefined) updateData.exchangeRate = data.exchangeRate;
+        if (data.shippingCostUSD !== undefined) updateData.shippingCostUSD = data.shippingCostUSD;
+        if (data.shippingPriceUSD !== undefined) updateData.shippingPriceUSD = data.shippingPriceUSD;
+
+        if (existing?.id) {
+            // Update existing row
+            const { error: updateError } = await supabaseAdmin
+                .from('system_settings_v4')
+                .update(updateData)
+                .eq('id', existing.id);
+
+            if (updateError) {
+                console.error("Error updating settings:", updateError);
+                throw updateError;
+            }
+        } else {
+            // Insert new row
+            const { error: insertError } = await supabaseAdmin
+                .from('system_settings_v4')
+                .insert({
+                    ...updateData,
+                    exchangeRate: data.exchangeRate || 5.0,
+                    shippingCostUSD: data.shippingCostUSD || 4.5,
+                    shippingPriceUSD: data.shippingPriceUSD || 5.0,
+                    createdAt: new Date().toISOString()
+                });
+
+            if (insertError) {
+                console.error("Error inserting settings:", insertError);
+                throw insertError;
+            }
+        }
+
+        console.log("[updateSystemSettings] Successfully updated:", updateData);
         return true;
     } catch (error) {
         console.error("Error updating system settings:", error);
@@ -254,9 +306,11 @@ export async function getRawAppSettings(): Promise<Partial<AppSettings>> {
 
 export async function updateAppSettings(data: Partial<AppSettings>): Promise<boolean> {
     // Forward to new function for backward compatibility
+    // Map AppSettings fields to SystemSettings fields
     return await updateSystemSettings({
         exchangeRate: data.exchangeRate,
-        shippingPriceUSD: data.pricePerKiloUSD
+        shippingCostUSD: data.pricePerKiloUSD, // Company cost per kilo
+        shippingPriceUSD: data.customerPricePerKiloUSD, // Customer price per kilo
     });
 }
 
@@ -1012,33 +1066,84 @@ export async function unassignRepresentativeFromOrder(orderId: string): Promise<
 export async function deleteOrder(orderId: string): Promise<boolean> {
     try {
         console.log("Attempting to delete order:", orderId);
-        const orderRef = doc(db, ORDERS_COLLECTION, orderId);
-        const orderSnap = await getDoc(orderRef);
-        if (!orderSnap.exists()) {
-            console.error("Order not found:", orderId);
+
+        // Fetch order from Supabase
+        const { data: orderData, error: fetchError } = await supabaseAdmin
+            .from('orders_v4')
+            .select('*')
+            .eq('id', orderId)
+            .single();
+
+        if (fetchError || !orderData) {
+            console.error("Order not found:", fetchError);
             throw new Error("Order to delete not found");
         }
-        console.log("Order found, proceeding with delete. User ID:", orderSnap.data().userId);
-        const orderData = orderSnap.data() as Order;
+
+        console.log("Order found, proceeding with delete. User ID:", orderData.userId);
         const userId = orderData.userId;
 
-        const batch = writeBatch(db);
-
-        if (orderData.representativeId) {
-            const repRef = doc(db, REPRESENTATIVES_COLLECTION, orderData.representativeId);
-            batch.update(repRef, { assignedOrders: increment(-1) });
+        // ===== PAYMENT REVERSAL LOGIC =====
+        // Reverse treasury card payment if down payment was made
+        const downPayment = orderData.downPaymentLYD || orderData.downPayment || 0; // fallback just in case
+        if (downPayment > 0 && orderData.paymentMethod) {
+            console.log(`[deleteOrder] Reversing payment: ${downPayment} LYD via ${orderData.paymentMethod}`);
+            await reversePayment(
+                orderId,
+                orderData.invoiceNumber,
+                orderData.paymentMethod as 'cash' | 'card' | 'cash_dollar',
+                downPayment,
+                orderData.exchangeRate
+            );
         }
 
-        const transactionsQuery = query(collection(db, TRANSACTIONS_COLLECTION), where("orderId", "==", orderId));
-        const transactionsSnapshot = await getDocs(transactionsQuery);
-        transactionsSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
+        // Reverse USDT deduction if hybrid payment was used
+        if (orderData.usdtPaid && orderData.usdtPaid > 0) {
+            console.log(`[deleteOrder] Reversing USDT deduction: ${orderData.usdtPaid} USDT`);
+            await addTreasuryTransaction({
+                amount: orderData.usdtPaid,
+                type: 'deposit',
+                description: `Reversal from deleted Order #${orderData.invoiceNumber}`,
+                relatedOrderId: orderId
+            });
+        }
+        // ===================================
 
-        batch.delete(orderRef);
-        await batch.commit();
-        console.log("Batch commit finished for deleteOrder");
+        // Update representative stats if assigned
+        if (orderData.representativeId) {
+            const { data: rep } = await supabaseAdmin
+                .from('representatives_v4')
+                .select('assignedOrders')
+                .eq('id', orderData.representativeId)
+                .single();
 
+            if (rep) {
+                await supabaseAdmin
+                    .from('representatives_v4')
+                    .update({ assignedOrders: (rep.assignedOrders || 1) - 1 })
+                    .eq('id', orderData.representativeId);
+            }
+        }
+
+        // Delete related transactions
+        await supabaseAdmin
+            .from('transactions_v4')
+            .delete()
+            .eq('orderId', orderId);
+
+        // Delete the order
+        const { error: deleteError } = await supabaseAdmin
+            .from('orders_v4')
+            .delete()
+            .eq('id', orderId);
+
+        if (deleteError) {
+            console.error("Error deleting order:", deleteError);
+            throw deleteError;
+        }
+
+        console.log("Order deleted successfully");
+
+        // Recalculate user stats
         if (userId) {
             await recalculateUserStats(userId);
         }
@@ -2511,6 +2616,218 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
     }
 }
 
+
+
+// --- Treasury Cards Actions ---
+
+export async function getTreasuryCards(): Promise<TreasuryCard[]> {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from(TREASURY_CARDS_COLLECTION)
+            .select('*')
+            .order('type', { ascending: true });
+
+        if (error) throw error;
+        return (data || []) as TreasuryCard[];
+    } catch (error) {
+        console.error("Error getting treasury cards:", error);
+        return [];
+    }
+}
+
+export async function addTreasuryCardTransaction(
+    cardType: 'cash_libyan' | 'bank' | 'cash_dollar',
+    amount: number,
+    type: 'deposit' | 'withdrawal',
+    description: string
+): Promise<boolean> {
+    try {
+        // Get the card
+        const { data: card, error: fetchError } = await supabaseAdmin
+            .from(TREASURY_CARDS_COLLECTION)
+            .select('*')
+            .eq('type', cardType)
+            .single();
+
+        if (fetchError || !card) {
+            console.error(`Treasury card ${cardType} not found:`, fetchError);
+            return false;
+        }
+
+        // Update balance
+        const newBalance = type === 'deposit' ? card.balance + amount : card.balance - amount;
+
+        const { error: updateError } = await supabaseAdmin
+            .from(TREASURY_CARDS_COLLECTION)
+            .update({
+                balance: newBalance,
+                updatedAt: new Date().toISOString()
+            })
+            .eq('id', card.id);
+
+        if (updateError) throw updateError;
+
+        console.log(`[Treasury] ${type} of ${amount} ${card.currency} to ${card.name}. New balance: ${newBalance}`);
+        return true;
+    } catch (error) {
+        console.error("Error processing treasury card transaction:", error);
+        return false;
+    }
+}
+
+export async function distributePayment(
+    orderId: string,
+    invoiceNumber: string,
+    paymentMethod: 'cash' | 'card' | 'cash_dollar',
+    amountLYD: number
+): Promise<boolean> {
+    try {
+        console.log(`[distributePayment] Order: ${invoiceNumber}, Method: ${paymentMethod}, Amount: ${amountLYD} LYD`);
+
+        if (amountLYD <= 0) {
+            console.log(`[distributePayment] Amount is zero or negative, skipping.`);
+            return true;
+        }
+
+        switch (paymentMethod) {
+            case 'cash':
+                // Add to "كاش ليبي" card
+                await addTreasuryCardTransaction(
+                    'cash_libyan',
+                    amountLYD,
+                    'deposit',
+                    `Payment from Order #${invoiceNumber}`
+                );
+                break;
+
+            case 'card':
+                // Add to "مصرف" card  
+                await addTreasuryCardTransaction(
+                    'bank',
+                    amountLYD,
+                    'deposit',
+                    `Payment from Order #${invoiceNumber}`
+                );
+                break;
+
+            case 'cash_dollar':
+                // Convert to USD and add to "دولار كاش" card
+                const settings = await getAppSettings();
+                const exchangeRate = settings.exchangeRate;
+
+                // Safety check: ensure exchange rate is valid (must be > 1 for LYD to USD)
+                if (!exchangeRate || exchangeRate <= 1) {
+                    console.error(`[distributePayment] Invalid exchange rate: ${exchangeRate}. Cannot convert to USD.`);
+                    throw new Error(`سعر الصرف غير صحيح (${exchangeRate}). يرجى تحديث سعر الصرف في الإعدادات.`);
+                }
+
+                const amountUSD = amountLYD / exchangeRate;
+                console.log(`[distributePayment] Converting ${amountLYD} LYD to ${amountUSD.toFixed(2)} USD (rate: ${exchangeRate})`);
+
+                await addTreasuryCardTransaction(
+                    'cash_dollar',
+                    amountUSD,
+                    'deposit',
+                    `Payment from Order #${invoiceNumber} (${amountLYD} LYD ÷ ${exchangeRate} = ${amountUSD.toFixed(2)} USD)`
+                );
+                break;
+
+            default:
+                console.warn(`[distributePayment] Unknown payment method: ${paymentMethod}`);
+                return false;
+        }
+
+        console.log(`[distributePayment] Successfully distributed payment for Order #${invoiceNumber}`);
+        return true;
+    } catch (error) {
+        console.error("Error distributing payment:", error);
+        return false;
+    }
+}
+
+/**
+ * Reverse payment distribution when an order is deleted
+ * Withdraws the payment amount from the appropriate treasury card
+ */
+export async function reversePayment(
+    orderId: string,
+    invoiceNumber: string,
+    paymentMethod: 'cash' | 'card' | 'cash_dollar',
+    amountLYD: number,
+    orderExchangeRate?: number
+): Promise<boolean> {
+    try {
+        console.log(`[reversePayment] Order: ${invoiceNumber}, Method: ${paymentMethod}, Amount: ${amountLYD} LYD`);
+
+        if (amountLYD <= 0) {
+            console.log(`[reversePayment] Amount is zero or negative, skipping.`);
+            return true;
+        }
+
+        switch (paymentMethod) {
+            case 'cash':
+                // Withdraw from "كاش ليبي" card
+                await addTreasuryCardTransaction(
+                    'cash_libyan',
+                    amountLYD,
+                    'withdrawal',
+                    `Reversal: Order Deleted #${invoiceNumber}`
+                );
+                break;
+
+            case 'card':
+                // Withdraw from "مصرف" card
+                await addTreasuryCardTransaction(
+                    'bank',
+                    amountLYD,
+                    'withdrawal',
+                    `Reversal: Order Deleted #${invoiceNumber}`
+                );
+                break;
+
+            case 'cash_dollar':
+                // Convert back to USD and withdraw from "دولار كاش" card
+                // Use current settings exchange rate if order rate is missing
+                // Ideally we should use the rate at which it was deposited, but distrubutePayment uses current rate.
+                // If we have orderExchangeRate, let's use it to be precise?
+                // Actually distributePayment uses the rate at that moment. The order stores `exchangeRate`.
+
+                let exchangeRate = orderExchangeRate;
+                if (!exchangeRate) {
+                    const settings = await getAppSettings();
+                    exchangeRate = settings.exchangeRate;
+                    console.warn(`[reversePayment] Missing order exchange rate, using current rate: ${exchangeRate}`);
+                }
+
+                if (!exchangeRate || exchangeRate <= 1) {
+                    console.error(`[reversePayment] Invalid exchange rate: ${exchangeRate}. Cannot convert to USD.`);
+                    // Return false but maybe we should try to withdraw something? Safe to fail here.
+                    return false;
+                }
+
+                const amountUSD = amountLYD / exchangeRate;
+                console.log(`[reversePayment] Converting ${amountLYD} LYD to ${amountUSD.toFixed(2)} USD (rate: ${exchangeRate})`);
+
+                await addTreasuryCardTransaction(
+                    'cash_dollar',
+                    amountUSD,
+                    'withdrawal',
+                    `Reversal: Order Deleted #${invoiceNumber} (-${amountUSD.toFixed(2)} USD)`
+                );
+                break;
+
+            default:
+                console.warn(`[reversePayment] Unknown payment method: ${paymentMethod}`);
+                return false;
+        }
+
+        console.log(`[reversePayment] Successfully reversed payment for Order #${invoiceNumber}`);
+        return true;
+    } catch (error) {
+        console.error("Error reversing payment:", error);
+        return false;
+    }
+}
 
 
 // --- User Wallet Actions ---

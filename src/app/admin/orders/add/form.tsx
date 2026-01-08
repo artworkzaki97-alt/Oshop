@@ -28,7 +28,8 @@ import {
     getAppSettings,
     getOrderById,
     getTempOrders,
-    updateTempOrder
+    updateTempOrder,
+    distributePayment
 } from '@/lib/actions';
 import { useToast } from "@/components/ui/use-toast";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -82,7 +83,7 @@ const AddOrderForm = () => {
     const [manualStoreName, setManualStoreName] = useState('');
     const [operationDate, setOperationDate] = useState<Date>(new Date());
     const [deliveryDate, setDeliveryDate] = useState<Date>();
-    const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'cash_dollar'>('cash');
     const [status, setStatus] = useState<OrderStatus>('pending');
     const [productLinks, setProductLinks] = useState('');
     const [cartUrl, setCartUrl] = useState('');
@@ -407,6 +408,15 @@ const AddOrderForm = () => {
                 }
                 // -----------------------------
 
+                // --- PAYMENT DISTRIBUTION ---
+                try {
+                    await distributePayment(savedOrder.id, savedOrder.invoiceNumber, paymentMethod, downPaymentLYD);
+                } catch (paymentError) {
+                    console.error("Payment Distribution Error:", paymentError);
+                    toast({ title: "تحذير", description: "تم حفظ الطلب لكن فشل توزيع الدفعة.", variant: "destructive" });
+                }
+                // ---------------------------
+
                 toast({ title: "تم الحفظ بنجاح", description: "تم تسجيل العملية الجديدة في النظام." });
             }
 
@@ -591,7 +601,7 @@ const AddOrderForm = () => {
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
                         <FormField label="طريقة السداد" id="payment-method">
-                            <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="flex gap-4 pt-2">
+                            <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as 'cash' | 'card' | 'cash_dollar')} className="flex gap-4 pt-2">
                                 <div className="flex items-center space-x-2 space-x-reverse">
                                     <RadioGroupItem value="cash" id="cash" />
                                     <Label htmlFor="cash">نقدي</Label>
@@ -599,6 +609,10 @@ const AddOrderForm = () => {
                                 <div className="flex items-center space-x-2 space-x-reverse">
                                     <RadioGroupItem value="card" id="card" />
                                     <Label htmlFor="card">بطاقة مصرفية</Label>
+                                </div>
+                                <div className="flex items-center space-x-2 space-x-reverse">
+                                    <RadioGroupItem value="cash_dollar" id="cash_dollar" />
+                                    <Label htmlFor="cash_dollar">دولار كاش</Label>
                                 </div>
                             </RadioGroup>
                         </FormField>
