@@ -14,7 +14,7 @@ const InfoRow = ({ icon, label, value }: { icon: React.ReactNode, label: string,
     </div>
 );
 
-export const PrintableInvoice = ({ labelData }: { labelData: Order }) => {
+export const PrintableInvoice = ({ labelData, customValue }: { labelData: Order, customValue?: number }) => {
     const isPaymentOnReceipt = labelData.remainingAmount > 0;
     // Calculate if shipping is calculated
     const hasShippingCalc = labelData.weightKG && labelData.weightKG > 0;
@@ -88,7 +88,7 @@ export const PrintableInvoice = ({ labelData }: { labelData: Order }) => {
                     </p>
                     {isPaymentOnReceipt && (
                         <p className="text-xl font-bold text-red-600">
-                            {labelData.remainingAmount.toFixed(2)} د.ل
+                            {customValue !== undefined ? customValue.toFixed(2) : labelData.remainingAmount.toFixed(2)} د.ل
                         </p>
                     )}
                 </div>
