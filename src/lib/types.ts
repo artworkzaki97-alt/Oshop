@@ -305,7 +305,7 @@ export interface SheinCard {
 export interface TreasuryCard {
   id: string;
   name: string; // "كاش ليبي", "مصرف", "دولار كاش"
-  type: 'cash_libyan' | 'bank' | 'cash_dollar';
+  type: 'cash_libyan' | 'bank' | 'cash_dollar' | 'usdt_treasury';
   balance: number; // in LYD for first two, USD for last one
   currency: 'LYD' | 'USD';
   createdAt: string; // ISO
