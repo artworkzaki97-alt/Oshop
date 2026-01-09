@@ -3082,8 +3082,8 @@ export async function saveOrderWeight(
 
         return { success: true };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error saving order weight:", error);
-        return { success: false, message: 'Internal Error' };
+        return { success: false, message: error.message || 'Internal Error' };
     }
 }
