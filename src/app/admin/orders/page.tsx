@@ -66,7 +66,8 @@ import {
   getRepresentatives,
   assignRepresentativeToOrder,
   unassignRepresentativeFromOrder,
-  bulkAssignRepresentativeToOrder
+  bulkAssignRepresentativeToOrder,
+  saveOrderWeight
 } from '@/lib/actions';
 
 // --- CONFIGURATION ---
@@ -229,28 +230,31 @@ export default function AdminOrdersPage() {
 
   const handleWeightSave = async (orderId: string, weightKG: number, costPrice: number, sellingPrice: number, costCurrency: 'LYD' | 'USD', sellingCurrency: 'LYD' | 'USD') => {
 
-    const updateData: Partial<Order> = {
-      weightKG,
-      companyWeightCost: costPrice,
-      customerWeightCost: sellingPrice,
-      companyWeightCostCurrency: costCurrency,
-      customerWeightCostCurrency: sellingCurrency,
-    };
+    // Use server action that handles financial transaction creation
+    const result = await saveOrderWeight(orderId, weightKG, costPrice, sellingPrice, costCurrency, sellingCurrency);
 
-    // Also populate legacy/specific fields if needed for backward compat or specific logic
-    if (costCurrency === 'USD') {
-      updateData.companyWeightCostUSD = costPrice;
-    }
-    if (sellingCurrency === 'USD') {
-      updateData.customerWeightCostUSD = sellingPrice;
-    }
-
-    const success = await updateOrder(orderId, updateData);
-    if (success) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updateData } : o));
-      toast({ title: "تم التحديث", description: "تم تحديث بيانات الشحنة بنجاح" });
+    if (result.success) {
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId) {
+          return {
+            ...o,
+            weightKG,
+            companyWeightCost: costPrice,
+            customerWeightCost: sellingPrice,
+            companyWeightCostCurrency: costCurrency,
+            customerWeightCostCurrency: sellingCurrency,
+            // Legacy
+            companyWeightCostUSD: costCurrency === 'USD' ? costPrice : o.companyWeightCostUSD,
+            customerWeightCostUSD: sellingCurrency === 'USD' ? sellingPrice : o.customerWeightCostUSD,
+            // Note: totalAmountLYD and debt in local state won't update perfectly without a refresh or return from server,
+            // but visually we care about the weight inputs being saved.
+          };
+        }
+        return o;
+      }));
+      toast({ title: "تم التحديث", description: "تم تحديث بيانات الوزن وإضافة المعاملة المالية بنجاح" });
     } else {
-      toast({ title: "خطأ", description: "فشل حفظ البيانات", variant: "destructive" });
+      toast({ title: "خطأ", description: "فشل حفظ البيانات: " + (result.message || ''), variant: "destructive" });
     }
   };
 

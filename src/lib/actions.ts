@@ -3007,3 +3007,83 @@ export async function getAllWalletTransactions(): Promise<WalletTransaction[]> {
 }
 
 
+
+// --- Weight & Finance Integration ---
+
+export async function saveOrderWeight(
+    orderId: string,
+    weight: number,
+    costPrice: number,
+    sellingPrice: number,
+    costCurrency: 'LYD' | 'USD',
+    sellingCurrency: 'LYD' | 'USD'
+): Promise<{ success: boolean; message?: string }> {
+    try {
+        const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+        const orderSnap = await getDoc(orderRef);
+
+        if (!orderSnap.exists()) {
+            return { success: false, message: 'Order not found' };
+        }
+
+        const order = orderSnap.data() as Order;
+        const exchangeRate = order.exchangeRate || 1;
+
+        // Helper to get LYD value
+        const getLYDValue = (amount: number, currency: 'LYD' | 'USD') => {
+            return currency === 'USD' ? amount * exchangeRate : amount;
+        };
+
+        // Calculate Old Cost in LYD
+        const oldCurrency = order.customerWeightCostCurrency || 'LYD';
+        const oldSellingPrice = order.customerWeightCost || 0;
+        const oldCostLYD = getLYDValue(oldSellingPrice, oldCurrency as 'LYD' | 'USD');
+
+        // Calculate New Cost in LYD
+        const newCostLYD = getLYDValue(sellingPrice, sellingCurrency);
+
+        // Difference
+        const diff = newCostLYD - oldCostLYD;
+
+        // Prepare Update Data
+        const updateData: Partial<Order> = {
+            weightKG: weight,
+            companyWeightCost: costPrice,
+            customerWeightCost: sellingPrice,
+            companyWeightCostCurrency: costCurrency,
+            customerWeightCostCurrency: sellingCurrency,
+
+            // Update Total Amount (adding the difference)
+            totalAmountLYD: (order.totalAmountLYD || 0) + diff
+        };
+
+        // Legacy/Double-write fields
+        if (costCurrency === 'USD') updateData.companyWeightCostUSD = costPrice;
+        if (sellingCurrency === 'USD') updateData.customerWeightCostUSD = sellingPrice;
+
+        await updateDoc(orderRef, updateData);
+
+        // Create Financial Transaction if there is a difference
+        // This will update the Order remainingAmount and User Debt via addTransaction Logic
+        if (Math.abs(diff) > 0.01) {
+            const type = diff > 0 ? 'debt' : 'payment';
+
+            await addTransaction({
+                orderId: orderId,
+                customerId: order.userId,
+                customerName: order.customerName,
+                amount: Math.abs(diff),
+                type: type,
+                description: `وزن الشحنة (${weight}kg)`,
+                date: new Date().toISOString(),
+                status: 'completed'
+            });
+        }
+
+        return { success: true };
+
+    } catch (error) {
+        console.error("Error saving order weight:", error);
+        return { success: false, message: 'Internal Error' };
+    }
+}
