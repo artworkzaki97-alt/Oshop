@@ -820,8 +820,9 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
         const finalOrderData = {
             ...orderData,
             invoiceNumber,
+            invoiceNumber,
             exchangeRate: orderData.exchangeRate || settings.exchangeRate || 1,
-            remainingAmount: (orderData.sellingPriceLYD || 0) - (orderData.downPaymentLYD || 0),
+            remainingAmount: orderData.sellingPriceLYD || 0, // Start with full amount, deduction happens via transaction
             managerId,
             sequenceNumber: nextSeq, // Store numeric sequence if schema allows, helpful for ordering
             operationDate: orderData.operationDate || new Date().toISOString()
@@ -841,7 +842,21 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
 
         console.log("🟢 [addOrder] Success:", newOrder.invoiceNumber);
 
-        // NEW: Distribute payment to treasury
+        // NEW: Process Down Payment Transaction (User & Order Ledger)
+        if (finalOrderData.downPaymentLYD && finalOrderData.downPaymentLYD > 0) {
+            await addTransaction({
+                orderId: newOrder.id,
+                customerId: orderData.userId,
+                customerName: orderData.customerName,
+                amount: finalOrderData.downPaymentLYD,
+                type: 'payment',
+                date: new Date().toISOString(),
+                status: 'paid', // Transaction is paid
+                description: 'دفعة مقدمة (عربون)'
+            });
+        }
+
+        // NEW: Distribute payment to treasury (Company Ledger)
         if (finalOrderData.downPaymentLYD && finalOrderData.downPaymentLYD > 0 && finalOrderData.paymentMethod) {
             await distributePayment(
                 newOrder.id,
@@ -2567,16 +2582,63 @@ export async function getTreasuryBalance(): Promise<number> {
     }
 }
 
-export async function addTreasuryTransaction(tx: { amount: number, type: 'deposit' | 'withdrawal', description: string, relatedOrderId?: string, channel?: 'cash' | 'bank' }) {
+export async function addTreasuryTransaction(tx: { amount: number, type: 'deposit' | 'withdrawal', description: string, relatedOrderId?: string, channel?: 'cash' | 'bank', cardId: string }) {
     try {
-        const { error } = await supabaseAdmin
-            .from(TREASURY_COLLECTION)
-            .insert(tx);
+        console.log("🔵 [addTreasuryTransaction] Adding transaction:", tx);
 
-        if (error) throw error;
+        const { data: transaction, error: txError } = await supabaseAdmin
+            .from(TREASURY_COLLECTION)
+            .insert(tx)
+            .select()
+            .single();
+
+        if (txError) throw txError;
+
+        // Update Card Balance
+        const balanceChange = tx.type === 'deposit' ? tx.amount : -tx.amount;
+
+        const { data: card, error: cardFetchError } = await supabaseAdmin
+            .from(TREASURY_CARDS_COLLECTION)
+            .select('balance')
+            .eq('id', tx.cardId)
+            .single();
+
+        if (cardFetchError) throw cardFetchError;
+
+        const newBalance = (card.balance || 0) + balanceChange;
+
+        const { error: updateError } = await supabaseAdmin
+            .from(TREASURY_CARDS_COLLECTION)
+            .update({ balance: newBalance, updatedAt: new Date().toISOString() })
+            .eq('id', tx.cardId);
+
+        if (updateError) throw updateError;
+
+        return transaction;
     } catch (error) {
         console.error("Error adding treasury transaction:", error);
         throw error;
+    }
+}
+
+export async function getTreasuryTransactions(cardId?: string): Promise<TreasuryTransaction[]> {
+    try {
+        let query = supabaseAdmin
+            .from(TREASURY_COLLECTION)
+            .select('*')
+            .order('createdAt', { ascending: false });
+
+        if (cardId) {
+            query = query.eq('cardId', cardId);
+        }
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return (data || []) as TreasuryTransaction[];
+    } catch (error) {
+        console.error("Error getting treasury transactions:", error);
+        return [];
     }
 }
 

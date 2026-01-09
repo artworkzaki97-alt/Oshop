@@ -317,6 +317,7 @@ export interface TreasuryTransaction {
   amount: number;
   type: 'deposit' | 'withdrawal';
   channel?: 'cash' | 'bank'; // Added channel
+  cardId?: string; // Linked Treasury Card ID
   description: string;
   relatedOrderId?: string;
   createdAt: string; // ISO

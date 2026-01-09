@@ -52,7 +52,6 @@ const navItems = [
   { href: '/admin/representatives', icon: Bike, label: 'إدارة المندوبين', permissionId: 'representatives' },
   { href: '/admin/orders', icon: ShoppingCart, label: 'إدارة الطلبات', permissionId: 'orders' },
   { href: '/admin/sites', icon: Globe, label: 'إدارة المواقع العالمية', permissionId: 'orders' },
-  { href: '/admin/sites', icon: Globe, label: 'إدارة المواقع العالمية', permissionId: 'orders' },
   // Inventory removed as per request
   { href: '/admin/shein-cards', icon: CreditCard, label: 'البطاقات والخزينة', permissionId: 'inventory' },
   { href: '/admin/shipping-label', icon: Printer, label: 'إنشاء بوليصة شحن', permissionId: 'shipping_label' },

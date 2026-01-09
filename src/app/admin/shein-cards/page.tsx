@@ -4,12 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, Calendar } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { SheinCard, TreasuryCard } from '@/lib/types';
-import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, addTreasuryTransaction, getTreasuryCards } from '@/lib/actions';
+import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, getTreasuryCards } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -22,12 +22,19 @@ export default function SheinCardsPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'used' | 'expired'>('all');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [isTreasuryDialogOpen, setIsTreasuryDialogOpen] = useState(false);
+
+    // Treasury Management State
     const [treasuryBalance, setTreasuryBalance] = useState(0);
-    const [treasuryAmount, setTreasuryAmount] = useState('');
-    const [treasuryNote, setTreasuryNote] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
     const [treasuryCards, setTreasuryCards] = useState<TreasuryCard[]>([]);
+    const [selectedTreasuryCard, setSelectedTreasuryCard] = useState<TreasuryCard | null>(null);
+    const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+    const [manageTab, setManageTab] = useState<'actions' | 'history'>('actions');
+    const [history, setHistory] = useState<any[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [manageAmount, setManageAmount] = useState('');
+    const [manageNote, setManageNote] = useState('');
+    const [manageType, setManageType] = useState<'deposit' | 'withdrawal'>('deposit');
+    const [isSaving, setIsSaving] = useState(false);
 
     // Form State
     const [currentCardId, setCurrentCardId] = useState<string | null>(null);
@@ -138,10 +145,6 @@ export default function SheinCardsPage() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <h1 className="text-3xl font-bold tracking-tight">إدارة البطاقات والخزينة</h1>
                 <div className="flex gap-2">
-                    <Button onClick={() => setIsTreasuryDialogOpen(true)} variant="secondary" className="gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        إضافة رصيد USDT
-                    </Button>
                     <Button onClick={() => handleOpenDialog()}>
                         <Plus className="w-4 h-4 ml-2" />
                         إضافة بطاقة جديدة
@@ -181,16 +184,6 @@ export default function SheinCardsPage() {
                         <p className="text-xs text-muted-foreground">مجموع الكل (متاح + مستخدم)</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">خزينة USDT</CardTitle>
-                        <DollarSign className="h-4 w-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-800 dark:text-green-200">{treasuryBalance.toFixed(2)} $</div>
-                        <p className="text-xs text-green-600/80 dark:text-green-400">الرصيد النقدي المتاح</p>
-                    </CardContent>
-                </Card>
             </div>
 
             {/* Treasury Cards Section */}
@@ -207,7 +200,20 @@ export default function SheinCardsPage() {
                                 <div className="text-2xl font-bold text-blue-800 dark:text-blue-200">
                                     {card.balance.toFixed(2)} {card.currency === 'LYD' ? 'د.ل' : '$'}
                                 </div>
-                                <p className="text-xs text-blue-600/80 dark:text-blue-400">الرصيد الحالي</p>
+                                <p className="text-xs text-blue-600/80 dark:text-blue-400 mb-4">الرصيد الحالي</p>
+                                <Button
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSelectedTreasuryCard(card);
+                                        setManageTab('actions');
+                                        setIsManageDialogOpen(true);
+                                        setManageAmount('');
+                                        setManageNote('');
+                                    }}
+                                >
+                                    إدارة / سجل
+                                </Button>
                             </CardContent>
                         </Card>
                     ))}
@@ -309,6 +315,7 @@ export default function SheinCardsPage() {
                 </CardContent>
             </Card>
 
+            {/* Main Add/Edit Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -358,61 +365,143 @@ export default function SheinCardsPage() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isTreasuryDialogOpen} onOpenChange={setIsTreasuryDialogOpen}>
-                <DialogContent>
+            {/* Treasury Management Dialog */}
+            <Dialog open={isManageDialogOpen} onOpenChange={setIsManageDialogOpen}>
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>إضافة رصيد للخزينة (USDT)</DialogTitle>
+                        <DialogTitle>إدارة {selectedTreasuryCard?.name}</DialogTitle>
                         <DialogDescription>
-                            أدخل المبلغ الذي تود إيداعه في الخزينة.
+                            إدارة العمليات والسجل المالي للبطاقة.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label>المبلغ ($)</Label>
-                            <Input
-                                type="number"
-                                step="0.01"
-                                value={treasuryAmount}
-                                onChange={(e) => setTreasuryAmount(e.target.value)}
-                                placeholder="0.00"
-                                dir="ltr"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>الملاحظات (اختياري)</Label>
-                            <Input
-                                value={treasuryNote}
-                                onChange={(e) => setTreasuryNote(e.target.value)}
-                                placeholder="سبب الإيداع..."
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsTreasuryDialogOpen(false)}>إلغاء</Button>
-                        <Button onClick={async () => {
-                            if (!treasuryAmount) return;
-                            setIsSaving(true);
-                            try {
-                                await addTreasuryTransaction({
-                                    amount: parseFloat(treasuryAmount),
-                                    type: 'deposit',
-                                    description: treasuryNote || 'إيداع يدوي',
-                                });
-                                toast({ title: "تم الإيداع", description: "تم إضافة الرصيد بنجاح" });
-                                setIsTreasuryDialogOpen(false);
-                                setTreasuryAmount('');
-                                setTreasuryNote('');
-                                fetchCards();
-                            } catch (e) {
-                                toast({ title: "خطأ", description: "فشل الإيداع", variant: "destructive" });
-                            } finally {
-                                setIsSaving(false);
-                            }
-                        }} disabled={isSaving}>
-                            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            إيداع
+
+                    <div className="flex gap-2 border-b mb-4">
+                        <Button
+                            variant={manageTab === 'actions' ? 'default' : 'ghost'}
+                            onClick={() => setManageTab('actions')}
+                            className="rounded-b-none"
+                        >
+                            العمليات
                         </Button>
-                    </DialogFooter>
+                        <Button
+                            variant={manageTab === 'history' ? 'default' : 'ghost'}
+                            onClick={async () => {
+                                setManageTab('history');
+                                if (selectedTreasuryCard) {
+                                    setHistoryLoading(true);
+                                    try {
+                                        const { getTreasuryTransactions } = await import('@/lib/actions');
+                                        const data = await getTreasuryTransactions(selectedTreasuryCard.id);
+                                        setHistory(data);
+                                    } catch (e) { console.error(e); }
+                                    setHistoryLoading(false);
+                                }
+                            }}
+                            className="rounded-b-none"
+                        >
+                            السجل
+                        </Button>
+                    </div>
+
+                    {manageTab === 'actions' ? (
+                        <div className="space-y-4 py-4">
+                            <div className="flex gap-4">
+                                <Button
+                                    variant={manageType === 'deposit' ? 'default' : 'outline'}
+                                    onClick={() => setManageType('deposit')}
+                                    className={manageType === 'deposit' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+                                >
+                                    إيداع (+)
+                                </Button>
+                                <Button
+                                    variant={manageType === 'withdrawal' ? 'default' : 'outline'}
+                                    onClick={() => setManageType('withdrawal')}
+                                    className={manageType === 'withdrawal' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+                                >
+                                    سحب (-)
+                                </Button>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>المبلغ ({selectedTreasuryCard?.currency === 'LYD' ? 'د.ل' : '$'})</Label>
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={manageAmount}
+                                    onChange={(e) => setManageAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    dir="ltr"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>ملاحظات</Label>
+                                <Input
+                                    value={manageNote}
+                                    onChange={(e) => setManageNote(e.target.value)}
+                                    placeholder="سبب العملية..."
+                                />
+                            </div>
+
+                            <Button onClick={async () => {
+                                if (!manageAmount || !selectedTreasuryCard) return;
+                                setIsSaving(true);
+                                try {
+                                    const { addTreasuryTransaction } = await import('@/lib/actions');
+                                    await addTreasuryTransaction({
+                                        amount: parseFloat(manageAmount),
+                                        type: manageType,
+                                        description: manageNote || (manageType === 'deposit' ? 'إيداع يدوي' : 'سحب يدوي'),
+                                        cardId: selectedTreasuryCard.id
+                                    });
+                                    toast({ title: "تم بنجاح", description: "تم تنفيذ العملية بنجاح" });
+                                    setIsManageDialogOpen(false);
+                                    fetchCards();
+                                } catch (e) {
+                                    toast({ title: "خطأ", description: "فشل تنفيذ العملية", variant: "destructive" });
+                                } finally {
+                                    setIsSaving(false);
+                                }
+                            }} disabled={isSaving} className="w-full">
+                                {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                تنفيذ {manageType === 'deposit' ? 'الإيداع' : 'السحب'}
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                            {historyLoading ? (
+                                <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
+                            ) : history.length === 0 ? (
+                                <p className="text-center text-muted-foreground p-8">لا يوجد سجل عمليات</p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="text-right">التاريخ</TableHead>
+                                            <TableHead className="text-center">النوع</TableHead>
+                                            <TableHead className="text-center">المبلغ</TableHead>
+                                            <TableHead className="text-right">ملاحظات</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {history.map((tx) => (
+                                            <TableRow key={tx.id}>
+                                                <TableCell>{format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={tx.type === 'deposit' ? 'default' : 'destructive'} className={tx.type === 'deposit' ? 'bg-green-600' : 'bg-red-600'}>
+                                                        {tx.type === 'deposit' ? 'إيداع' : 'سحب'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center font-bold dir-ltr">
+                                                    {tx.amount.toFixed(2)}
+                                                </TableCell>
+                                                <TableCell>{tx.description}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>
