@@ -44,7 +44,7 @@ async function debugWeight(orderId: string) {
 const TEST_ORDER_ID = 'REPLACE_WITH_VALID_ID';
 
 // Fetch a recent order to test if ID not known
-import { supabaseAdmin } from './src/lib/supabaseAdmin';
+import { supabaseAdmin } from './src/lib/supabase-admin';
 async function run() {
     const { data } = await supabaseAdmin.from('orders_v4').select('id').limit(1).single();
     if (data) {
