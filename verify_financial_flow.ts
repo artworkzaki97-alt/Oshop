@@ -3,9 +3,9 @@ import {
     deleteOrder,
     saveOrderWeight,
     getUserById,
-    getTreasuryCards,
-    supabaseAdmin // Needed for direct DB checks
+    getTreasuryCards
 } from './src/lib/actions';
+import { supabaseAdmin } from './src/lib/supabase-admin';
 
 async function verifyFlow() {
     console.log("🚀 Starting Financial Flow Verification");
