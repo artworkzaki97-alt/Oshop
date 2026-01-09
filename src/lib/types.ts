@@ -75,6 +75,7 @@ export interface Order {
   customerWeightCost?: number;
   customerWeightCostCurrency?: 'LYD' | 'USD';
   companyWeightCost?: number;
+  companyWeightCostCurrency?: 'LYD' | 'USD';
   companyWeightCostUSD?: number;
   companyPricePerKilo?: number;
   companyPricePerKiloUSD?: number;

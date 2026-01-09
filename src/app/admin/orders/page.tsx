@@ -227,13 +227,30 @@ export default function AdminOrdersPage() {
     setWeightDialogOpen(true);
   };
 
-  const handleWeightSave = async (orderId: string, weightKG: number) => {
-    const success = await updateOrder(orderId, { weightKG });
+  const handleWeightSave = async (orderId: string, weightKG: number, costPrice: number, sellingPrice: number, currency: 'LYD' | 'USD') => {
+
+    const updateData: Partial<Order> = {
+      weightKG,
+      companyWeightCost: costPrice,
+      customerWeightCost: sellingPrice,
+      customerWeightCostCurrency: currency,
+      // For company cost currency, we'll align with the selected currency or use generic
+      // Since we added companyWeightCostCurrency to types, we use it.
+      companyWeightCostCurrency: currency,
+    };
+
+    // Also populate legacy/specific fields if needed for backward compat or specific logic
+    if (currency === 'USD') {
+      updateData.companyWeightCostUSD = costPrice;
+      updateData.customerWeightCostUSD = sellingPrice;
+    }
+
+    const success = await updateOrder(orderId, updateData);
     if (success) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, weightKG } : o));
-      toast({ title: "تم التحديث", description: "تم إضافة وزن الشحنة بنجاح" });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updateData } : o));
+      toast({ title: "تم التحديث", description: "تم تحديث بيانات الشحنة بنجاح" });
     } else {
-      toast({ title: "خطأ", description: "فشل حفظ الوزن", variant: "destructive" });
+      toast({ title: "خطأ", description: "فشل حفظ البيانات", variant: "destructive" });
     }
   };
 
@@ -842,26 +859,46 @@ function WeightDialog({ open, onOpenChange, order, onSave }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: Order | null;
-  onSave: (orderId: string, weight: number) => Promise<void>;
+  onSave: (orderId: string, weightKG: number, costPrice: number, sellingPrice: number, currency: 'LYD' | 'USD') => Promise<void>;
 }) {
   const [weight, setWeight] = useState<string>('');
+  const [costPrice, setCostPrice] = useState<string>('');
+  const [sellingPrice, setSellingPrice] = useState<string>('');
+  const [currency, setCurrency] = useState<'LYD' | 'USD'>('USD');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (order) {
       setWeight(order.weightKG?.toString() || '');
+      // Initialize prices if they exist, trying to be smart about which field to pick
+      // Default to USD currency if strict logic isn't clear, or check existing currency fields
+      const existingCurrency = order.customerWeightCostCurrency || order.companyWeightCostCurrency || 'USD';
+      setCurrency(existingCurrency);
+
+      setCostPrice(order.companyWeightCost?.toString() || '');
+      setSellingPrice(order.customerWeightCost?.toString() || '');
+    } else {
+      setWeight('');
+      setCostPrice('');
+      setSellingPrice('');
+      setCurrency('USD');
     }
   }, [order]);
 
   const handleSave = async () => {
     if (!order) return;
     const weightNum = parseFloat(weight);
+    const costNum = parseFloat(costPrice);
+    const sellingNum = parseFloat(sellingPrice);
+
+    // Basic validation
     if (isNaN(weightNum) || weightNum < 0) {
-      // specific validation if needed, or just let it save 0
+      // toast error or prevent
+      return;
     }
 
     setIsSaving(true);
-    await onSave(order.id, weightNum || 0);
+    await onSave(order.id, weightNum || 0, costNum || 0, sellingNum || 0, currency);
     setIsSaving(false);
     onOpenChange(false);
   };
@@ -870,12 +907,13 @@ function WeightDialog({ open, onOpenChange, order, onSave }: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent dir="rtl">
         <DialogHeader>
-          <DialogTitle>إضافة وزن للشحنة</DialogTitle>
+          <DialogTitle>تحديث بيانات الشحنة</DialogTitle>
           <DialogDescription>
-            إدخال وزن الشحنة لطلب {order?.invoiceNumber}
+            إدخال الوزن والتكاليف لطلب {order?.invoiceNumber}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
+
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="weight" className="text-right">الوزن (كجم)</Label>
             <Input
@@ -889,6 +927,50 @@ function WeightDialog({ open, onOpenChange, order, onSave }: {
               placeholder="0.0"
             />
           </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="currency" className="text-right">العملة</Label>
+            <div className="col-span-3">
+              <Select value={currency} onValueChange={(v) => setCurrency(v as 'LYD' | 'USD')}>
+                <SelectTrigger dir="ltr">
+                  <SelectValue placeholder="العملة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">دولار (USD)</SelectItem>
+                  <SelectItem value="LYD">دينار (LYD)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="costPrice" className="text-right">سعر التكلفة</Label>
+            <Input
+              id="costPrice"
+              type="number"
+              step="0.01"
+              value={costPrice}
+              onChange={(e) => setCostPrice(e.target.value)}
+              className="col-span-3 text-left"
+              dir="ltr"
+              placeholder="0.00"
+            />
+          </div>
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="sellingPrice" className="text-right">سعر البيع</Label>
+            <Input
+              id="sellingPrice"
+              type="number"
+              step="0.01"
+              value={sellingPrice}
+              onChange={(e) => setSellingPrice(e.target.value)}
+              className="col-span-3 text-left"
+              dir="ltr"
+              placeholder="0.00"
+            />
+          </div>
+
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
