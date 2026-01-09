@@ -841,6 +841,16 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
 
         console.log("🟢 [addOrder] Success:", newOrder.invoiceNumber);
 
+        // NEW: Distribute payment to treasury
+        if (finalOrderData.downPaymentLYD && finalOrderData.downPaymentLYD > 0 && finalOrderData.paymentMethod) {
+            await distributePayment(
+                newOrder.id,
+                newOrder.invoiceNumber,
+                finalOrderData.paymentMethod as 'cash' | 'card' | 'cash_dollar',
+                finalOrderData.downPaymentLYD
+            );
+        }
+
         // 5. Update User Counter (Best effort)
         await supabaseAdmin
             .from(USERS_COLLECTION)

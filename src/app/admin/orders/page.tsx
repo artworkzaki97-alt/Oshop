@@ -55,10 +55,9 @@ import {
   Package, Search, PlusCircle, Filter, MoreHorizontal,
   Edit, Trash2, Printer, MapPin, CheckCircle, Clock,
   DollarSign, Truck, Building, Plane, UserPlus, UserX,
-  Copy, Loader2, X, Sparkles, Users, RefreshCw
+  Copy, Loader2, X, Sparkles, Users, RefreshCw, Scale
 } from "lucide-react";
 
-// Types & Actions
 import { Order, OrderStatus, Representative, AppSettings } from '@/lib/types';
 import {
   getOrders,
@@ -110,6 +109,9 @@ export default function AdminOrdersPage() {
 
   const [quickEditOpen, setQuickEditOpen] = useState(false);
   const [orderToQuickEdit, setOrderToQuickEdit] = useState<Order | null>(null);
+
+  const [weightDialogOpen, setWeightDialogOpen] = useState(false);
+  const [orderToAddWeight, setOrderToAddWeight] = useState<Order | null>(null);
 
   // Bulk Dialogs
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -217,6 +219,21 @@ export default function AdminOrdersPage() {
       toast({ title: "تم التحديث", description: "تم تعديل البيانات بنجاح" });
     } else {
       toast({ title: "خطأ", description: "فشل حفظ التعديلات", variant: "destructive" });
+    }
+  };
+
+  const handleWeightClick = (order: Order) => {
+    setOrderToAddWeight(order);
+    setWeightDialogOpen(true);
+  };
+
+  const handleWeightSave = async (orderId: string, weightKG: number) => {
+    const success = await updateOrder(orderId, { weightKG });
+    if (success) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, weightKG } : o));
+      toast({ title: "تم التحديث", description: "تم إضافة وزن الشحنة بنجاح" });
+    } else {
+      toast({ title: "خطأ", description: "فشل حفظ الوزن", variant: "destructive" });
     }
   };
 
@@ -520,6 +537,10 @@ export default function AdminOrdersPage() {
                                 <Sparkles className="h-4 w-4 ml-2" />
                                 تعديل سريع
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleWeightClick(order)}>
+                                <Scale className="h-4 w-4 ml-2" />
+                                إضافة وزن
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => window.open(`/admin/orders/${order.id}/print`, '_blank')}>
                                 <Printer className="h-4 w-4 ml-2" />
                                 طباعة
@@ -723,6 +744,14 @@ export default function AdminOrdersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Weight Dialog */}
+      <WeightDialog
+        open={weightDialogOpen}
+        onOpenChange={setWeightDialogOpen}
+        order={orderToAddWeight}
+        onSave={handleWeightSave}
+      />
+
       {/* Quick Edit Dialog */}
       <QuickEditDialog
         open={quickEditOpen}
@@ -801,6 +830,71 @@ function QuickEditDialog({ open, onOpenChange, order, onSave }: {
           <Button type="submit" onClick={handleSave} disabled={isSaving}>
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             حفظ التعديلات
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- Weight Dialog Component ---
+function WeightDialog({ open, onOpenChange, order, onSave }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: Order | null;
+  onSave: (orderId: string, weight: number) => Promise<void>;
+}) {
+  const [weight, setWeight] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (order) {
+      setWeight(order.weightKG?.toString() || '');
+    }
+  }, [order]);
+
+  const handleSave = async () => {
+    if (!order) return;
+    const weightNum = parseFloat(weight);
+    if (isNaN(weightNum) || weightNum < 0) {
+      // specific validation if needed, or just let it save 0
+    }
+
+    setIsSaving(true);
+    await onSave(order.id, weightNum || 0);
+    setIsSaving(false);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl">
+        <DialogHeader>
+          <DialogTitle>إضافة وزن للشحنة</DialogTitle>
+          <DialogDescription>
+            إدخال وزن الشحنة لطلب {order?.invoiceNumber}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="weight" className="text-right">الوزن (كجم)</Label>
+            <Input
+              id="weight"
+              type="number"
+              step="0.1"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              className="col-span-3 text-left"
+              dir="ltr"
+              placeholder="0.0"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+            حفظ
           </Button>
         </DialogFooter>
       </DialogContent>
