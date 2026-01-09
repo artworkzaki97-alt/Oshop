@@ -1,5 +1,5 @@
 
-import { addOrder, getOrderById, getUserById, getOrdersByUserId, getRecentTransactions } from './src/lib/actions';
+import { addOrder, getOrderById, getUserById, getOrdersByUserId, getTransactions } from './src/lib/actions';
 
 // Mock DB or use actual DB if running locally with auth
 // This script simulates the flow
