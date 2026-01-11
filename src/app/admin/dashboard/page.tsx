@@ -129,7 +129,13 @@ const itemVariant = {
 
 const AdminDashboardPage = () => {
     const [manager, setManager] = useState<Manager | null>(null);
-    const [dailyData, setDailyData] = useState({ revenue: 0, expenses: 0, netProfit: 0 });
+    const [dailyData, setDailyData] = useState({
+        revenue: 0,
+        expenses: 0,
+        netProfit: 0,
+        totalOrders: 0,
+        trends: { revenue: 0, expenses: 0, netProfit: 0, orders: 0 }
+    });
     const [chartData, setChartData] = useState<any[]>([]);
     const [recentOrders, setRecentOrders] = useState<Order[]>([]);
     const [statusConfig, setStatusConfig] = useState<any>({}); // Will load dynamically if possible
@@ -156,7 +162,12 @@ const AdminDashboardPage = () => {
                         const fetchedManager = await getManagerById(userData.id);
                         if (fetchedManager) {
                             setManager(fetchedManager);
-                            const hasReportsPermission = fetchedManager.permissions?.includes('reports') || fetchedManager.username === 'admin@tamweelsys.app';
+                            const hasReportsPermission =
+                                fetchedManager.permissions?.includes('reports') ||
+                                fetchedManager.permissions?.includes('financial_reports') ||
+                                fetchedManager.permissions?.includes('dashboard') ||
+                                fetchedManager.username === 'admin@tamweelsys.app';
+
                             if (hasReportsPermission) {
                                 fetchDailyFinancials();
                             } else {
@@ -191,29 +202,67 @@ const AdminDashboardPage = () => {
 
             const todayTransactions = regularTransactions.filter(t => t.date.startsWith(todayStr));
 
-            // Calculate Today's stats
+            // Today's Stats
             const todayRevenue = todayTransactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + t.amount, 0);
             const todayExpenses = expenses.filter(e => e.date.startsWith(todayStr)).reduce((sum, e) => sum + e.amount, 0);
 
+            const calculateProfit = (orderList: Order[]) => {
+                return orderList.reduce((profit, order) => {
+                    const purchasePriceUSD = order.purchasePriceUSD || 0;
+                    const shippingCostLYD = order.shippingCostLYD || 0;
+                    const purchaseCostLYD = purchasePriceUSD * (order.exchangeRate || 0);
+                    return profit + (order.sellingPriceLYD - purchaseCostLYD - shippingCostLYD);
+                }, 0);
+            };
+
             const todayOrders = orders.filter(o => o.operationDate.startsWith(todayStr) && o.status !== 'cancelled' && !o.userId.startsWith('TEMP-'));
-            const todayGrossProfit = todayOrders.reduce((profit, order) => {
-                const purchasePriceUSD = order.purchasePriceUSD || 0;
-                const shippingCostLYD = order.shippingCostLYD || 0;
-                const purchaseCostLYD = purchasePriceUSD * (order.exchangeRate || 0);
-                return profit + (order.sellingPriceLYD - purchaseCostLYD - shippingCostLYD);
-            }, 0);
-            const todayNetProfit = todayGrossProfit - todayExpenses;
+            const todayNetProfit = calculateProfit(todayOrders) - todayExpenses;
 
-            setDailyData({ revenue: todayRevenue, expenses: todayExpenses, netProfit: todayNetProfit });
+            // Yesterday's Stats
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            const yesterdayTransactions = regularTransactions.filter(t => t.date.startsWith(yesterdayStr));
 
-            // Demo Chart Data
+            const yesterdayRevenue = yesterdayTransactions.filter(t => t.type === 'payment').reduce((sum, t) => sum + t.amount, 0);
+            const yesterdayExpenses = expenses.filter(e => e.date.startsWith(yesterdayStr)).reduce((sum, e) => sum + e.amount, 0);
+            const yesterdayOrders = orders.filter(o => o.operationDate.startsWith(yesterdayStr) && o.status !== 'cancelled' && !o.userId.startsWith('TEMP-'));
+            const yesterdayNetProfit = calculateProfit(yesterdayOrders) - yesterdayExpenses;
+
+            // Trend Calculation
+            const calcTrend = (current: number, previous: number) => {
+                if (previous === 0) return current === 0 ? 0 : 100;
+                return ((current - previous) / previous) * 100;
+            };
+
+            const trends = {
+                revenue: calcTrend(todayRevenue, yesterdayRevenue),
+                expenses: calcTrend(todayExpenses, yesterdayExpenses),
+                netProfit: calcTrend(todayNetProfit, yesterdayNetProfit),
+                orders: calcTrend(orders.length, orders.length)
+            };
+
+            setDailyData({
+                revenue: todayRevenue,
+                expenses: todayExpenses,
+                netProfit: todayNetProfit,
+                totalOrders: orders.length,
+                trends
+            });
+
+            // Real Chart Data - Last 7 Days
             const days = [];
-            for (let i = 5; i >= 0; i--) {
+            for (let i = 6; i >= 0; i--) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
                 const dStr = d.toISOString().split('T')[0];
                 const dayName = format(d, 'EEE', { locale: ar });
-                days.push({ name: dayName, value: Math.floor(Math.random() * 100) }); // Placeholder logic tied to real data later
+
+                // Calculate total sales for this day
+                const dayOrders = orders.filter(o => o.operationDate.startsWith(dStr) && o.status !== 'cancelled' && !o.userId.startsWith('TEMP-'));
+                const dayValue = dayOrders.reduce((sum, o) => sum + (o.sellingPriceLYD || 0), 0);
+
+                days.push({ name: dayName, value: dayValue, fullDate: dStr });
             }
             setChartData(days);
 
@@ -226,6 +275,9 @@ const AdminDashboardPage = () => {
     const hasReportsAccess = manager?.permissions?.includes('financial_dashboard') ||
         manager?.permissions?.includes('reports') ||
         manager?.username === 'admin@tamweelsys.app';
+
+    // Calculate max value for chart scaling
+    const maxChartValue = Math.max(...chartData.map(d => d.value), 100); // Default to 100 to avoid division by zero
 
     return (
         <motion.div
@@ -255,9 +307,9 @@ const AdminDashboardPage = () => {
                 {[
                     {
                         title: "إجمالي الطلبات",
-                        value: recentOrders.length.toString(), // Simplified for demo, should be total count
+                        value: dailyData.totalOrders.toString(),
                         icon: Package,
-                        trend: "+12%",
+                        trend: "الكل", // Static for total count
                         color: "text-[#f7941d]",
                         bg: "bg-[#f7941d]/10"
                     },
@@ -265,7 +317,7 @@ const AdminDashboardPage = () => {
                         title: "الإيرادات اليومية",
                         value: `${dailyData.revenue.toLocaleString()} د.ل`,
                         icon: DollarSign,
-                        trend: "+8.2%",
+                        trend: `${dailyData.trends.revenue > 0 ? '+' : ''}${dailyData.trends.revenue.toFixed(1)}%`,
                         color: "text-green-500",
                         bg: "bg-green-500/10"
                     },
@@ -273,7 +325,7 @@ const AdminDashboardPage = () => {
                         title: "المصاريف",
                         value: `${dailyData.expenses.toLocaleString()} د.ل`,
                         icon: TrendingDown,
-                        trend: "-2.1%",
+                        trend: `${dailyData.trends.expenses > 0 ? '+' : ''}${dailyData.trends.expenses.toFixed(1)}%`,
                         color: "text-red-500",
                         bg: "bg-red-500/10"
                     },
@@ -281,7 +333,7 @@ const AdminDashboardPage = () => {
                         title: "صافي الأرباح",
                         value: `${dailyData.netProfit.toLocaleString()} د.ل`,
                         icon: Zap,
-                        trend: "+15%",
+                        trend: `${dailyData.trends.netProfit > 0 ? '+' : ''}${dailyData.trends.netProfit.toFixed(1)}%`,
                         color: "text-purple-500",
                         bg: "bg-purple-500/10"
                     }
@@ -295,10 +347,10 @@ const AdminDashboardPage = () => {
                                     <stat.icon className="h-6 w-6" />
                                 </div>
                                 <div className="flex items-center gap-1 text-xs font-medium bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-lg text-muted-foreground border border-gray-100 dark:border-transparent">
-                                    <span className={stat.trend.startsWith('+') ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                                    <span className={stat.trend.startsWith('+') ? "text-green-600 dark:text-green-400" : stat.trend.startsWith('-') ? "text-red-600 dark:text-red-400" : "text-gray-500"}>
                                         {stat.trend}
                                     </span>
-                                    <span>ش.م</span>
+                                    {i !== 0 && <span>مقارنة بالأمس</span>}
                                 </div>
                             </div>
 
@@ -319,22 +371,31 @@ const AdminDashboardPage = () => {
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">تحليل المبيعات</h3>
                         <select className="bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-lg px-2 py-1 text-muted-foreground outline-none">
                             <option>آخر 7 أيام</option>
-                            <option>آخر 30 يوم</option>
                         </select>
                     </div>
                     <div className="h-[300px] w-full bg-gradient-to-t from-[#f7941d]/5 to-transparent rounded-2xl border border-gray-100 dark:border-white/5 relative overflow-hidden flex items-end justify-between px-4 pb-0 pt-8 gap-2">
-                        {[40, 70, 45, 90, 65, 85, 55].map((h, i) => (
-                            <div key={i} className="w-full h-full flex items-end group relative">
-                                <div
-                                    className="w-full bg-[#f7941d] rounded-t-lg opacity-80 group-hover:opacity-100 transition-all duration-300 relative z-10"
-                                    style={{ height: `${h}%` }}
-                                >
-                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-black text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-lg whitespace-nowrap z-20 pointer-events-none">
-                                        {h * 10} د.ل
+                        {chartData.map((day, i) => {
+                            const heightPercent = maxChartValue > 0 ? (day.value / maxChartValue) * 100 : 0;
+                            // Ensure min height for visibility if value > 0, else 0
+                            const finalHeight = day.value > 0 ? Math.max(heightPercent, 5) : 0;
+
+                            return (
+                                <div key={i} className="w-full h-full flex items-end group relative">
+                                    <div
+                                        className="w-full bg-[#f7941d] rounded-t-lg opacity-80 group-hover:opacity-100 transition-all duration-300 relative z-10"
+                                        style={{ height: `${finalHeight}%` }}
+                                    >
+                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-black text-white text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-lg whitespace-nowrap z-20 pointer-events-none">
+                                            {day.value.toLocaleString()} د.ل
+                                        </div>
+                                        {/* Date Label on Bottom (Optional or on Hover) */}
+                                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground whitespace-nowrap">
+                                            {day.name}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
 
