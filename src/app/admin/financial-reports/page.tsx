@@ -14,8 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DollarSign, CreditCard, MoreHorizontal, Edit, Trash2, TrendingUp, RefreshCcw, TrendingDown, Calendar as CalendarIcon, Loader2, Search, ArrowUpDown } from "lucide-react";
 import { Badge } from '@/components/ui/badge';
-import { getTransactions, deleteOrder, getOrders, getAppSettings, resetFinancialReports, getExpenses, getCreditors, getManagers, getAllWalletTransactions } from '@/lib/actions';
-import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor, Manager, WalletTransaction } from '@/lib/types';
+import { getTransactions, deleteOrder, getOrders, getAppSettings, performFactoryReset, getExpenses, getCreditors, getManagers, getAllWalletTransactions, getDeposits, getAllExternalDebts, getInstantSales, getTreasuryTransactions, getUsers, deleteExpense, deleteWalletTransaction, deleteDeposit, deleteTreasuryTransaction } from '@/lib/actions';
+import { Transaction, Order, AppSettings, Expense, OrderStatus, Creditor, Manager, WalletTransaction, Deposit, ExternalDebt, InstantSale, TreasuryTransaction } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import {
     DropdownMenu,
@@ -69,6 +69,20 @@ type ChartDataPoint = {
     profit: number;
 };
 
+// Unified Transaction Type for the Master Log
+type UnifiedTransaction = {
+    id: string;
+    date: string; // ISO String
+    type: 'order' | 'payment' | 'expense' | 'deposit' | 'withdrawal' | 'debt_external' | 'instant_sale' | 'treasury_log' | 'wallet_log' | 'arboon';
+    amount: number;
+    description: string;
+    source: string; // e.g. "Customer: Ahmed", "Manager: Sarah", "Creditor: China Office"
+    status: string; // standardized status
+    referenceId?: string; // orderId, userId, etc.
+    details?: any; // Extra payload
+    direction: 'in' | 'out' | 'neutral';
+};
+
 const FinancialReportsPage = () => {
     const router = useRouter();
     const { toast } = useToast();
@@ -83,39 +97,220 @@ const FinancialReportsPage = () => {
     const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
     const [managers, setManagers] = useState<Manager[]>([]);
     const [selectedManagerId, setSelectedManagerId] = useState<string>('all');
-    const [allWalletTransactions, setAllWalletTransactions] = useState<WalletTransaction[]>([]); // Added state
+
+    const [allWalletTransactions, setAllWalletTransactions] = useState<WalletTransaction[]>([]);
+    const [allDeposits, setAllDeposits] = useState<Deposit[]>([]);
+    const [allExternalDebts, setAllExternalDebts] = useState<ExternalDebt[]>([]);
+    const [allInstantSales, setAllInstantSales] = useState<InstantSale[]>([]);
+    const [allTreasuryTransactions, setAllTreasuryTransactions] = useState<TreasuryTransaction[]>([]);
+
+    // Unified List
+    const [unifiedTransactions, setUnifiedTransactions] = useState<UnifiedTransaction[]>([]);
 
     const [filterType, setFilterType] = useState<string>('monthly');
+    const [transactionTypeFilter, setTransactionTypeFilter] = useState<string>('all'); // New Filter
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) });
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>(null);
 
     const fetchData = async () => {
         setIsLoading(true);
-        const [fetchedTransactions, fetchedOrders, fetchedSettings, fetchedExpenses, fetchedCreditors, fetchedManagers, fetchedWalletTransactions] = await Promise.all([
-            getTransactions(),
-            getOrders(),
-            getAppSettings(),
-            getExpenses(),
-            getCreditors(),
-            getManagers(),
-            getAllWalletTransactions() // Added fetch
-        ]);
-        setAllTransactions(fetchedTransactions);
-        setAllOrders(fetchedOrders);
-        setSettings(fetchedSettings);
-        setAllExpenses(fetchedExpenses);
-        setAllCreditors(fetchedCreditors);
-        setManagers(fetchedManagers);
-        setAllWalletTransactions(fetchedWalletTransactions);
-        setIsLoading(false);
+        try {
+            const [
+                fetchedTransactions,
+                fetchedOrders,
+                fetchedSettings,
+                fetchedExpenses,
+                fetchedCreditors,
+                fetchedManagers,
+                fetchedWalletTransactions,
+                fetchedDeposits,
+                fetchedExternalDebts,
+                fetchedInstantSales,
+                fetchedTreasuryTransactions,
+                fetchedUsers
+            ] = await Promise.all([
+                getTransactions(),
+                getOrders(),
+                getAppSettings(),
+                getExpenses(),
+                getCreditors(),
+                getManagers(),
+                getAllWalletTransactions(),
+                getDeposits(),
+                getAllExternalDebts(),
+                getInstantSales(),
+                getTreasuryTransactions(),
+                getUsers()
+            ]);
+
+            setAllTransactions(fetchedTransactions);
+            setAllOrders(fetchedOrders);
+            setSettings(fetchedSettings);
+            setAllExpenses(fetchedExpenses);
+            setAllCreditors(fetchedCreditors);
+            setManagers(fetchedManagers);
+            setAllWalletTransactions(fetchedWalletTransactions);
+            setAllDeposits(fetchedDeposits);
+            setAllExternalDebts(fetchedExternalDebts);
+            setAllInstantSales(fetchedInstantSales);
+            setAllTreasuryTransactions(fetchedTreasuryTransactions);
+
+            // --- Normalize and Merge ---
+            const unified: UnifiedTransaction[] = [];
+
+            // 1. Orders & Payments (from getTransactions)
+            fetchedTransactions.forEach(t => {
+                if (t.customerId.startsWith('TEMP-')) return; // Skip temp if needed, or include with distinct label
+                unified.push({
+                    id: t.id,
+                    date: t.date,
+                    type: t.type === 'order' ? 'order' : 'payment',
+                    amount: t.amount,
+                    description: t.description || (t.type === 'order' ? 'فاتورة طلب' : 'دفعة مالية'),
+                    source: `عميل: ${t.customerName}`,
+                    status: t.status,
+                    referenceId: t.orderId || undefined,
+                    direction: t.type === 'order' ? 'in' : 'in', // Technically Order isn't cash flow yet, but 'payment' is IN. 
+                    // Wait, 'order' transaction usually represents "User OWES us" (Debit) or "User PAID us"?
+                    // In Manager.io logic: Invoice = Revenue (Credit Sales) -> Positive? 
+                    // Let's assume Order = Revenue (In), Payment = Cash In (In).
+                    // Actually, if we track flow: Payment is Real Cash. Order is Accrual. 
+                    // For "Log", we just show them.
+                });
+            });
+
+            // 1b. All Orders from orders_v4 (includes orders not yet in transactions)
+            fetchedOrders.forEach(order => {
+                // Check if this order isn't already in unified via transactions
+                const existsInTransactions = unified.some(u => u.referenceId === order.id);
+                if (!existsInTransactions) {
+                    unified.push({
+                        id: order.id,
+                        date: order.operationDate,
+                        type: 'order',
+                        amount: order.sellingPriceLYD,
+                        description: `فاتورة ${order.invoiceNumber}: ${order.itemDescription || 'طلب'}`,
+                        source: `عميل: ${order.customerName}`,
+                        status: order.status,
+                        referenceId: order.id,
+                        direction: 'in'
+                    });
+                }
+            });
+
+
+            // 2. Expenses
+            fetchedExpenses.forEach(e => {
+                const manager = fetchedManagers.find(m => m.id === e.managerId);
+                unified.push({
+                    id: e.id,
+                    date: e.date,
+                    type: 'expense',
+                    amount: e.amount,
+                    description: e.description,
+                    source: manager ? `موظف: ${manager.name}` : 'مصروفات عامة',
+                    status: 'completed',
+                    direction: 'out'
+                });
+            });
+
+            // 3. Wallet Transactions
+            fetchedWalletTransactions.forEach(w => {
+                const user = fetchedUsers.find(u => u.id === w.userId);
+                const userName = user?.name || user?.username || 'غير معروف';
+                unified.push({
+                    id: w.id || '',
+                    date: w.createdAt || '',
+                    type: 'wallet_log',
+                    amount: w.amount,
+                    description: w.description,
+                    source: `شحن محفظة: ${userName}`,
+                    status: w.type === 'deposit' ? 'completed' : 'completed',
+                    direction: w.type === 'deposit' ? 'in' : 'out', // From User Perspective? Or System?
+                    // Wallet Deposit = User GIVES money to System (Revenue/Liability). So System IN.
+                    // Wallet Withdrawal = User TAKES money (or pays order). System OUT?
+                    // Let's stick to: Deposit (Green) = +Money for System (usually).
+                    // Actually, if User Deposits into Wallet -> Cash enters Treasury.
+                });
+            });
+
+            // 4. Deposits (Arboon)
+            fetchedDeposits.forEach(d => {
+                unified.push({
+                    id: d.id,
+                    date: d.collectedDate || d.date, // Use collected date if available
+                    type: 'arboon',
+                    amount: d.amount,
+                    description: `عربون: ${d.description || ''}`,
+                    source: `المندوب: ${d.representativeName || d.representativeId || 'غير محدد'}`,
+                    status: d.status,
+                    direction: 'in'
+                });
+            });
+
+            // 5. External Debts (Creditors)
+            fetchedExternalDebts.forEach(d => {
+                unified.push({
+                    id: d.id,
+                    date: d.date,
+                    type: 'debt_external',
+                    amount: d.amount,
+                    description: d.notes,
+                    source: `دائن: ${d.creditorName}`,
+                    status: d.status,
+                    direction: 'out' // Usually we pay them? Or they give us loan?
+                    // If it's debt we OWE -> It's a liability. 
+                    // If we PAY it -> Out. 
+                    // Need to check ExternalDebt model. Usually tracks "We owe".
+                });
+            });
+
+            // 6. Instant Sales
+            fetchedInstantSales.forEach(s => {
+                unified.push({
+                    id: s.id,
+                    date: s.createdAt,
+                    type: 'instant_sale',
+                    amount: s.finalSalePriceLYD,
+                    description: `بيع فوري: ${s.productName}`,
+                    source: 'زبون نقدي',
+                    status: 'completed',
+                    direction: 'in'
+                });
+            });
+
+            // 7. Treasury Logs (Central Cash Flow)
+            fetchedTreasuryTransactions.forEach(t => {
+                unified.push({
+                    id: t.id,
+                    date: t.createdAt,
+                    type: 'treasury_log',
+                    amount: t.amount,
+                    description: t.description,
+                    source: 'الخزينة',
+                    status: 'completed',
+                    direction: t.type === 'deposit' ? 'in' : 'out'
+                });
+            });
+
+            // Sort by Date Descending
+            unified.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setUnifiedTransactions(unified);
+
+        } catch (error) {
+            console.error("Failed to fetch financial data", error);
+            toast({ title: "خطأ", description: "فشل تحميل البيانات المالية", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
     }
 
     useEffect(() => {
         fetchData();
     }, []);
 
-    const { filteredTransactions, chartData, dateFilteredOrders } = useMemo(() => {
+    const { filteredTransactions, filteredUnifiedTransactions, chartData, dateFilteredOrders } = useMemo(() => {
         const regularTransactions = allTransactions.filter(t => !t.customerId.startsWith('TEMP-'));
         const regularOrders = allOrders.filter(o => !o.userId.startsWith('TEMP-'));
 
@@ -256,14 +451,81 @@ const FinancialReportsPage = () => {
             profit: dataMap[key].profit,
         })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+        // Filter Unified List
+        let filteredUnified = unifiedTransactions;
+
+        if (startDate && endDate) {
+            const start = startDate!;
+            const end = endDate!;
+            filteredUnified = filteredUnified.filter(t => {
+                const dates = t.date ? parseISO(t.date) : new Date();
+                return dates >= start && dates <= end;
+            });
+        }
+
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            filteredUnified = filteredUnified.filter(t =>
+                t.description.toLowerCase().includes(q) ||
+                t.source.toLowerCase().includes(q) ||
+                (t.amount.toString().includes(q))
+            );
+        }
+
+        if (transactionTypeFilter !== 'all') {
+            filteredUnified = filteredUnified.filter(t => t.type === transactionTypeFilter);
+        }
 
         return {
-            filteredTransactions: sortedTransactions,
-            chartData: finalChartData,
+            filteredTransactions: sortedTransactions, // Keep legacy for charts if needed
+            filteredUnifiedTransactions: filteredUnified, // New Master List
+            chartData: finalChartData, // Keep charts based on legacy logic for now, or update? User asked for "Log" primarily.
             dateFilteredOrders: dateFilteredOrders
         };
 
-    }, [filterType, dateRange, allTransactions, allOrders, allExpenses, searchQuery, sortConfig, settings, allWalletTransactions]);
+    }, [filterType, dateRange, allTransactions, allOrders, allExpenses, searchQuery, sortConfig, settings, allWalletTransactions, unifiedTransactions, transactionTypeFilter]);
+
+    const handleDeleteUnifiedTransaction = async (tx: UnifiedTransaction) => {
+        const confirmMessage = `هل أنت متأكد من حذف هذه المعاملة؟`;
+        if (!confirm(confirmMessage)) return;
+
+        try {
+            let success = false;
+
+            switch (tx.type) {
+                case 'order':
+                    if (tx.referenceId) {
+                        success = await deleteOrder(tx.referenceId);
+                    }
+                    break;
+                case 'expense':
+                    success = await deleteExpense(tx.id);
+                    break;
+                case 'wallet_log':
+                    success = await deleteWalletTransaction(tx.id);
+                    break;
+                case 'arboon':
+                    success = await deleteDeposit(tx.id);
+                    break;
+                case 'treasury_log':
+                    success = await deleteTreasuryTransaction(tx.id);
+                    break;
+                default:
+                    toast({ title: "خطأ", description: `لا يمكن حذف هذا النوع من المعاملات: ${tx.type}`, variant: "destructive" });
+                    return;
+            }
+
+            if (success) {
+                toast({ title: "تمت العملية", description: "تم حذف المعاملة بنجاح" });
+                await fetchData(); // Refresh data
+            } else {
+                toast({ title: "خطأ", description: "فشل حذف المعاملة", variant: "destructive" });
+            }
+        } catch (error) {
+            console.error("Delete transaction error:", error);
+            toast({ title: "خطأ", description: "حدث خطأ أثناء الحذف", variant: "destructive" });
+        }
+    };
 
     const requestSort = (key: SortableKeys) => {
         let direction: 'ascending' | 'descending' = 'ascending';
@@ -308,15 +570,43 @@ const FinancialReportsPage = () => {
         setTransactionToDelete(null);
     };
 
+    const [resetPassword, setResetPassword] = useState('');
+
     const handleResetReports = async () => {
-        const success = await resetFinancialReports();
-        if (success) {
-            toast({ title: "تم تصفير التقارير بنجاح" });
-            fetchData();
-        } else {
-            toast({ title: "خطأ", description: "فشل تصفير التقارير.", variant: "destructive" });
+        console.log("handleResetReports called");
+
+        if (!resetPassword) {
+            console.log("No password provided");
+            toast({ title: "خطأ", description: "يرجى إدخال كلمة المرور", variant: "destructive" });
+            return;
         }
-        setIsResetDialogOpen(false);
+
+        try {
+            const userStr = localStorage.getItem('loggedInUser');
+            console.log("User from localStorage:", userStr);
+
+            if (!userStr) {
+                toast({ title: "خطأ", description: "لم يتم العثور على بيانات المستخدم", variant: "destructive" });
+                return;
+            }
+            const user = JSON.parse(userStr);
+            console.log("Calling performFactoryReset with userId:", user.id);
+
+            const result = await performFactoryReset(resetPassword, user.id);
+            console.log("Factory reset result:", result);
+
+            if (result.success) {
+                toast({ title: "تم تصفير التقارير بنجاح" });
+                await fetchData();
+                setIsResetDialogOpen(false);
+                setResetPassword('');
+            } else {
+                toast({ title: "خطأ", description: result.message || "فشل تصفير التقارير.", variant: "destructive" });
+            }
+        } catch (error) {
+            console.error("Error in handleResetReports:", error);
+            toast({ title: "خطأ", description: "حدث خطأ أثناء تصفير النظام", variant: "destructive" });
+        }
     }
     const { totalRevenue, totalDebt, totalExpenses, netProfit, totalUSDCost, totalCreditorDebtLYD, totalCreditorDebtUSD } = useMemo(() => {
         const revenue = chartData.reduce((sum, item) => sum + item.revenue, 0);
@@ -549,32 +839,35 @@ const FinancialReportsPage = () => {
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-                                ) : filteredTransactions.length > 0 ? (
-                                    filteredTransactions.map((transaction) => {
-                                        const order = allOrders.find(o => o.id === transaction.orderId);
+                                ) : filteredUnifiedTransactions.length > 0 ? (
+                                    filteredUnifiedTransactions.map((tx) => {
+                                        const typeLabel = tx.type === 'order' ? 'طلب' :
+                                            tx.type === 'payment' ? 'دفعة' :
+                                                tx.type === 'expense' ? 'مصروف' :
+                                                    tx.type === 'wallet_log' ? 'محفظة' :
+                                                        tx.type === 'arboon' ? 'عربون' : tx.type;
+
                                         return (
-                                            <TableRow key={transaction.id}>
+                                            <TableRow key={tx.id}>
                                                 <TableCell className="font-medium">
-                                                    {order ? (
-                                                        <Link href={`/admin/orders/${order.id}`} className="hover:underline text-primary">
-                                                            {order.invoiceNumber}
+                                                    {tx.referenceId && tx.type === 'order' ? (
+                                                        <Link href={`/admin/orders/${tx.referenceId}`} className="hover:underline text-primary">
+                                                            {tx.description.split(':')[0]}
                                                         </Link>
                                                     ) : (
-                                                        transaction.description
+                                                        tx.description
                                                     )}
                                                 </TableCell>
-                                                <TableCell>{transaction.customerName} ({transaction.customerId.slice(-4)})</TableCell>
-                                                <TableCell>{new Date(transaction.date).toLocaleDateString('ar-LY')}</TableCell>
+                                                <TableCell>{tx.source}</TableCell>
+                                                <TableCell>{new Date(tx.date).toLocaleDateString('ar-LY')}</TableCell>
+                                                <TableCell>{typeLabel}</TableCell>
                                                 <TableCell>
-                                                    {transaction.type === 'order' ? 'طلب' : 'دفعة'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className={`font-normal ${statusConfig[transaction.status as keyof typeof statusConfig]?.className}`}>
-                                                        {statusConfig[transaction.status as keyof typeof statusConfig]?.text}
+                                                    <Badge variant="outline" className={`font-normal ${statusConfig[tx.status as keyof typeof statusConfig]?.className}`}>
+                                                        {statusConfig[tx.status as keyof typeof statusConfig]?.text || tx.status}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className={`${transaction.type === 'order' ? "text-destructive" : "text-green-600"}`}>
-                                                    {transaction.amount.toFixed(2)} د.ل
+                                                <TableCell className={`${tx.direction === 'in' ? "text-green-600" : "text-destructive"}`}>
+                                                    {tx.direction === 'in' ? '+' : '-'}{tx.amount.toFixed(2)} د.ل
                                                 </TableCell>
                                                 <TableCell>
                                                     <DropdownMenu>
@@ -586,18 +879,16 @@ const FinancialReportsPage = () => {
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
+                                                            {tx.type === 'order' && tx.referenceId && (
+                                                                <DropdownMenuItem onSelect={() => router.push(`/admin/orders/${tx.referenceId}`)}>
+                                                                    <Edit className="ml-2 h-4 w-4" /> عرض
+                                                                </DropdownMenuItem>
+                                                            )}
                                                             <DropdownMenuItem
-                                                                onSelect={() => router.push(`/admin/orders/add?id=${transaction.orderId}`)}
-                                                                disabled={!transaction.orderId}
-                                                            >
-                                                                <Edit className="ml-2 h-4 w-4" /> عرض / تعديل
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onSelect={() => openDeleteDialog(transaction)}
+                                                                onSelect={() => handleDeleteUnifiedTransaction(tx)}
                                                                 className="text-destructive focus:text-destructive-foreground focus:bg-destructive/90"
-                                                                disabled={transaction.type !== 'order'}
                                                             >
-                                                                <Trash2 className="ml-2 h-4 w-4" /> حذف الطلب
+                                                                <Trash2 className="ml-2 h-4 w-4" /> حذف
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -637,9 +928,18 @@ const FinancialReportsPage = () => {
                             سيتم حذف <span className="font-bold text-destructive">جميع المعاملات المالية والمصروفات</span> بشكل نهائي. لا يمكن التراجع عن هذا الإجراء.
                         </DialogDescription>
                     </DialogHeader>
+                    <div className="py-4 space-y-2">
+                        <p className="text-sm text-muted-foreground">للتأكيد، يرجى إدخال كلمة مرور المسؤول:</p>
+                        <Input
+                            type="password"
+                            placeholder="كلمة مرور المسؤول"
+                            value={resetPassword}
+                            onChange={(e) => setResetPassword(e.target.value)}
+                        />
+                    </div>
                     <DialogFooter>
                         <Button variant="destructive" onClick={handleResetReports}>نعم، قم بالتصفير</Button>
-                        <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>إلغاء</Button>
+                        <Button variant="outline" onClick={() => { setIsResetDialogOpen(false); setResetPassword(''); }}>إلغاء</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
