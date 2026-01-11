@@ -1,3 +1,7 @@
+import { supabaseAdmin } from './supabase-admin';
+
+const TREASURY_CARDS_COLLECTION = 'treasury_cards_v4';
+
 export async function getTreasuryCards() {
     try {
         const { data, error } = await supabaseAdmin
