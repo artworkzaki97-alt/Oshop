@@ -222,43 +222,47 @@ export default function AdminLayout({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 z-30 md:hidden backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 z-[55] md:hidden backdrop-blur-sm"
               onClick={() => setIsSidebarOpen(false)}
             />
           )}
         </AnimatePresence>
 
-        {/* Floating Sidebar */}
+        {/* Professional Sidebar */}
         <aside
           className={cn(
-            'fixed top-4 right-4 bottom-4 z-40 w-72 rounded-3xl transition-transform duration-300 ease-in-out no-print',
-            'glass-premium border-black/5 dark:border-white/5 flex flex-col shadow-2xl', // Premium Glass Style
-            isSidebarOpen ? 'translate-x-0' : 'translate-x-[110%]', // Use 110% to fully hide off-screen to right in RTL (positive x direction)?? 
-            // In RTL, "right-0" is the starting edge. Translate-x-full moves it LEFT? No.
-            // Let's rely on standard logic: if hidden, it should be pushed out.
-            // Tailwind RTL support can be tricky. Let's use standard placement.
-            'md:translate-x-0'
+            'fixed transition-transform duration-300 ease-in-out no-print flex flex-col',
+            // Mobile Styles: Full Height, Right Aligned, High Z-Index
+            'inset-y-0 right-0 z-[60] w-[85%] max-w-[320px] bg-[#1c1c1e]/95 backdrop-blur-2xl border-l border-white/5 shadow-2xl',
+            // Desktop Styles: Floating, Rounded, Lower Z-Index
+            'md:top-4 md:right-4 md:bottom-4 md:z-40 md:w-72 md:rounded-3xl md:bg-white md:dark:bg-[#1c1c1e] md:shadow-xl md:border md:border-gray-100 md:dark:border-white/5',
+            isSidebarOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
           )}
         >
-          <div className="flex items-center justify-between p-6 border-b border-white/10">
+          {/* Sidebar Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-white/5">
             <Link href="/admin/dashboard" className="flex items-center gap-3 group">
-              <div className="relative w-10 h-10 flex items-center justify-center bg-gradient-to-br from-primary to-accent rounded-xl shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all duration-500">
-                <Image src={logo} alt="Logo" width={28} height={28} className="brightness-0 invert" />
+              <div className="relative w-12 h-12 flex items-center justify-center bg-gradient-to-br from-primary to-orange-600 rounded-2xl shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-all duration-500">
+                <Image src={logo} alt="Logo" width={32} height={32} className="brightness-0 invert transform group-hover:scale-110 transition-transform" />
               </div>
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">Oshop</h1>
+              <div className="flex flex-col">
+                <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none">Oshop</h1>
+                <span className="text-[10px] text-primary font-bold tracking-widest uppercase mt-1">Admin Panel</span>
+              </div>
             </Link>
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden text-muted-foreground hover:text-foreground"
+              className="md:hidden text-gray-500 dark:text-white/50 hover:text-gray-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 rounded-xl"
               onClick={() => setIsSidebarOpen(false)}
             >
               <X className="h-6 w-6" />
             </Button>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-            <ul className="space-y-1">
+          {/* Navigation Items */}
+          <nav className="flex-1 overflow-y-auto px-4 py-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400 dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+            <ul className="space-y-2">
               {visibleNavItems.map((item) => {
                 const isActive = pathname.startsWith(item.href) && item.href !== '/admin/dashboard' || pathname === item.href;
                 return (
@@ -266,24 +270,25 @@ export default function AdminLayout({
                     <Link
                       href={item.href}
                       className={cn(
-                        'flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-300 group relative overflow-hidden',
+                        'flex items-center gap-4 rounded-2xl px-5 py-4 transition-all duration-300 group relative overflow-hidden',
                         isActive
-                          ? 'text-white bg-primary shadow-lg shadow-primary/25'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5'
+                          ? 'text-white bg-gradient-to-r from-primary to-orange-600 shadow-lg shadow-primary/25' // Active state: Solid primary gradient
+                          : 'text-gray-600 dark:text-gray-400 hover:text-primary dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5'
                       )}
                       onClick={() => setIsSidebarOpen(false)}
                     >
+                      {/* Active Indicator Bar (Removed for solid active bg style, or keep if preferred? I'll use the gradient bg as primarily requested for "Premium") */}
+                      {/* Actually, previous code used text-white on active, checking intent. It used primary/20 bg. I will switch to solid gradient for better contrast in light mode too. */}
+
                       <item.icon className={cn(
-                        "h-5 w-5 z-10 relative transition-transform duration-300",
-                        isActive ? "scale-110" : "group-hover:scale-110"
+                        "h-6 w-6 z-10 relative transition-transform duration-300",
+                        isActive ? "text-white scale-110" : "group-hover:text-primary dark:group-hover:text-white group-hover:scale-110"
                       )}
                       />
-                      <span className="z-10 relative font-medium text-sm">{item.label}</span>
-
-                      {/* Active / Hover Glow */}
-                      {!isActive && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      )}
+                      <span className={cn(
+                        "z-10 relative font-bold text-sm tracking-wide transition-all",
+                        isActive ? "text-white" : "group-hover:text-primary dark:group-hover:text-white"
+                      )}>{item.label}</span>
                     </Link>
                   </li>
                 )
@@ -291,15 +296,18 @@ export default function AdminLayout({
             </ul>
           </nav>
 
-          <div className="p-4 border-t border-white/10">
-            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center text-xs font-bold text-black border-2 border-white dark:border-slate-900">
+          {/* User Profile Footer */}
+          <div className="p-4 border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-black/20">
+            <div className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-colors cursor-pointer group shadow-sm">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-yellow-400 to-orange-500 flex items-center justify-center text-sm font-bold text-black border-2 border-white dark:border-white/10 shadow-lg relative">
                 {currentManager?.name?.[0] || 'A'}
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-[#1c1c1e]"></div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{currentManager?.name || 'Admin'}</p>
-                <p className="text-xs text-muted-foreground truncate">{currentManager?.username}</p>
+                <p className="text-sm font-bold text-gray-900 dark:text-white truncate group-hover:text-primary transition-colors">{currentManager?.name || 'Admin'}</p>
+                <p className="text-xs text-muted-foreground dark:text-white/40 truncate font-mono">{currentManager?.username}</p>
               </div>
+              <LogOut className="w-5 h-5 text-gray-400 dark:text-white/20 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors" onClick={handleLogout} />
             </div>
           </div>
         </aside>
@@ -343,9 +351,49 @@ export default function AdminLayout({
             </div>
           </header>
 
-          <main className="p-4 sm:p-6 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <main className="p-4 sm:p-6 md:p-8 pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {children}
           </main>
+        </div>
+
+        {/* Mobile Floating Dock Navigation */}
+        <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm">
+          <div className="bg-[#1c1c1e]/90 backdrop-blur-xl rounded-full border border-white/5 shadow-2xl flex items-center justify-between px-6 py-4">
+            {[
+              { href: '/admin/dashboard', icon: Home, label: 'الرئيسية' },
+              { href: '/admin/orders', icon: ShoppingCart, label: 'الطلبات' },
+              { href: '/admin/users', icon: Users, label: 'المستخدمين' },
+              { href: '/admin/shein-cards', icon: CreditCard, label: 'الخزينة' },
+            ].map((item) => {
+              const isActive = pathname === item.href || (item.href !== '/admin/dashboard' && pathname.startsWith(item.href));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="relative group"
+                >
+                  <div className={cn(
+                    "relative p-3 rounded-full transition-all duration-300",
+                    isActive ? "bg-[#f7941d] text-white shadow-[0_0_15px_rgba(247,148,29,0.5)] transform -translate-y-2" : "text-gray-400 hover:text-white"
+                  )}>
+                    <item.icon className={cn("w-6 h-6", isActive && "fill-current")} />
+                  </div>
+                  {isActive && (
+                    <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-[#f7941d] whitespace-nowrap opacity-0 animate-in fade-in slide-in-from-top-1 duration-300 fill-mode-forwards">
+                      {item.label}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="relative p-3 rounded-full text-gray-400 hover:text-white transition-all duration-300"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          </div>
         </div>
       </TooltipProvider>
     </div>

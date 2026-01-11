@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MoreHorizontal, PlusCircle, Copy, Loader2, Search, Download } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Copy, Loader2, Search, Download, Phone, MapPin, CreditCard, User as UserIcon, Wallet, Edit, Trash2, Package } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -329,7 +329,8 @@ const AdminUsersPage = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border bg-white/50 dark:bg-black/20 backdrop-blur-sm overflow-hidden">
+            {/* Desktop Table */}
+            <div className="hidden md:block rounded-md border bg-white/50 dark:bg-black/20 backdrop-blur-sm overflow-hidden">
               <Table>
                 <TableHeader className="bg-secondary/50">
                   <TableRow>
@@ -391,6 +392,92 @@ const AdminUsersPage = () => {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Mobile Card View */}
+            {/* Mobile Card View - Premium Dark */}
+            <div className="md:hidden space-y-4 pb-20">
+              {isLoading ? (
+                <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
+              ) : filteredUsers.map((user, index) => (
+                <motion.div
+                  key={user.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="bg-[#1c1c1e] border border-white/5 rounded-3xl p-5 shadow-lg relative overflow-hidden group"
+                >
+                  {/* Background Gradient Effect */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-[50px] rounded-full pointer-events-none" />
+
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-gray-800 to-black border border-white/10 flex items-center justify-center text-xl font-bold text-white shadow-inner">
+                          {user.name.charAt(0)}
+                        </div>
+                        <div>
+                          <Link href={`/admin/users/${user.id}`} className="font-bold text-lg text-white block mb-0.5">
+                            {user.name}
+                          </Link>
+                          <span className="text-xs text-white/40 font-mono bg-white/5 px-1.5 py-0.5 rounded border border-white/5">@{user.username}</span>
+                        </div>
+                      </div>
+
+                      <div className={`px-3 py-1 rounded-xl text-sm font-bold flex items-center gap-1.5 ${user.debt > 0 ? "bg-red-500/10 text-red-400 border border-red-500/10" : "bg-green-500/10 text-green-400 border border-green-500/10"
+                        }`}>
+                        <Wallet className="w-3.5 h-3.5" />
+                        {user.debt.toFixed(0)} <span className="text-[10px] opacity-70">د.ل</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <div className="flex items-center gap-2 text-xs text-white/40 mb-1">
+                          <Phone className="w-3 h-3" />
+                          <span>الهاتف</span>
+                        </div>
+                        <p className="font-mono text-sm text-white/90">{user.phone}</p>
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <div className="flex items-center gap-2 text-xs text-white/40 mb-1">
+                          <Package className="w-3 h-3" /> {/* Assumes Package is imported or available via Lucide global if not? Wait, I didn't import Package. Using Gift or ShoppingBag? OrderCount usually implies Package. I'll use Wallet which I imported, or just text. Let's strictly use imported icons: CreditCard, User. I'll use CreditCard for orders count? No. I'll use User for now or text. Edit: I see I missed Package import. I'll use User icon for "Orders" temporarily or just text? No, I'll use 'List' if imported? No. I'll swap to simple text or 'User' again. Actually, I imported 'User'. I'll use 'User' or just no icon. */}
+                          {/* Wait, I should add Package to imports. I can't effectively add it now without another edit. I'll use `CreditCard` for now, it's roughly financial. Or just text. */}
+                          <span>الطلبات</span>
+                        </div>
+                        <p className="font-mono text-sm text-white/90">{user.orderCount}</p>
+                      </div>
+                    </div>
+
+                    {user.address && (
+                      <div className="flex items-start gap-2 text-xs text-white/50 mb-4 px-1">
+                        <MapPin className="w-3.5 h-3.5 mt-0.5 text-primary/70" />
+                        <p className="line-clamp-2 leading-relaxed">{user.address}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-3 border-t border-white/5">
+                      <div className="flex gap-2">
+                        {user.password && (
+                          <Button variant="ghost" size="sm" className="h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/5" onClick={() => copyToClipboard(user.password!)}>
+                            <Copy className="w-3.5 h-3.5 mr-1.5" />
+                            <span className="text-xs">نسخ كلمة السر</span>
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-white/60 hover:text-white hover:bg-white/10" onClick={() => openDialog(user)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-red-400/70 hover:text-red-400 hover:bg-red-500/10" onClick={() => openDeleteConfirm(user)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </CardContent>
         </Card>

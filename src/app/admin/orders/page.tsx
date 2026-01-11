@@ -357,12 +357,12 @@ export default function AdminOrdersPage() {
 
 
   return (
-    <div className="p-4 md:p-8 space-y-6 min-h-screen bg-gray-50/50 pb-24" dir="rtl">
+    <div className="p-4 md:p-8 space-y-6 min-h-screen bg-gray-50/50 dark:bg-black pb-24" dir="rtl">
 
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">إدارة الطلبات</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">إدارة الطلبات</h1>
           <p className="text-muted-foreground mt-1">تتبع وإدارة جميع الشحنات والطلبات</p>
         </div>
         <Button
@@ -376,31 +376,31 @@ export default function AdminOrdersPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-none shadow-md bg-white/60 backdrop-blur-sm">
+        <Card className="border-none shadow-md bg-white/60 dark:bg-[#1c1c1e] backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">عدد الطلبات</CardTitle>
             <Package className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.count}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.count}</div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-md bg-white/60 backdrop-blur-sm">
+        <Card className="border-none shadow-md bg-white/60 dark:bg-[#1c1c1e] backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">إجمالي القيمة</CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-700">{stats.totalValue.toFixed(2)} د.ل</div>
+            <div className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.totalValue.toFixed(2)} د.ل</div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-md bg-white/60 backdrop-blur-sm">
+        <Card className="border-none shadow-md bg-white/60 dark:bg-[#1c1c1e] backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">الديون المتبقية</CardTitle>
             <DollarSign className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-700">{stats.totalDebt.toFixed(2)} د.ل</div>
+            <div className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.totalDebt.toFixed(2)} د.ل</div>
           </CardContent>
         </Card>
       </div>
@@ -440,7 +440,8 @@ export default function AdminOrdersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="rounded-md border-t">
+          {/* Desktop Table View */}
+          <div className="hidden md:block rounded-md border-t">
             <Table>
               <TableHeader className="bg-gray-50/50">
                 <TableRow>
@@ -601,6 +602,158 @@ export default function AdminOrdersPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Mobile Card View */}
+          {/* Mobile Card View - Premium Dark Design */}
+          <div className="md:hidden flex flex-col gap-4 pb-24">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+                <p className="text-muted-foreground animate-pulse">جاري تحميل الطلبات...</p>
+              </div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mb-6">
+                  <Package className="h-10 w-10 opacity-50" />
+                </div>
+                <p className="text-lg font-medium text-foreground">لا توجد طلبات</p>
+                <p className="text-sm opacity-60 mb-6">لم يتم العثور على نتائج مطابقة للبحث</p>
+                <Button onClick={() => router.push('/admin/orders/add')} className="rounded-full px-8">
+                  <PlusCircle className="mr-2 h-4 w-4" /> إضافة طلب
+                </Button>
+              </div>
+            ) : (
+              filteredOrders.map((order) => {
+                const statusInfo = statusConfig[order.status] || { text: order.status, className: '', icon: null };
+                const isSelected = selectedRows.has(order.id);
+
+                return (
+                  <motion.div
+                    key={order.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`relative overflow-hidden rounded-3xl border transition-all duration-300 ${isSelected
+                      ? 'bg-[#1c1c1e] border-primary/50 shadow-[0_0_30px_rgba(247,148,29,0.15)] ring-1 ring-primary'
+                      : 'bg-[#1c1c1e] border-white/5 shadow-lg'
+                      }`}
+                    onClick={() => {
+                      // Optional: Toggle selection on click if desired, currently strictly checkbox
+                    }}
+                  >
+                    {/* Status Strip / Glow */}
+                    <div className={`absolute top-0 right-0 w-1.5 h-full ${order.status === 'delivered' ? 'bg-green-500 shadow-[0_0_15px_#22c55e]' :
+                      order.status === 'cancelled' ? 'bg-red-500 shadow-[0_0_15px_#ef4444]' :
+                        'bg-primary shadow-[0_0_15px_#f7941d]'
+                      }`} />
+
+                    <div className="p-5 pl-4">
+                      {/* Top Row: Invoice & Date */}
+                      <div className="flex justify-between items-start mb-4 pr-3">
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-xl font-black text-white tracking-tight font-mono">
+                              {order.invoiceNumber}
+                            </h3>
+                            {order.trackingId && (
+                              <span className="text-[10px] bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-white/50 font-mono">
+                                {order.trackingId}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-white/40 font-medium flex items-center gap-1.5">
+                            <Clock className="w-3 h-3" />
+                            {format(new Date(order.operationDate), 'EEEE d MMMM', { locale: (window as any).dateFnsLocaleAr })} • {format(new Date(order.operationDate), 'hh:mm a')}
+                          </p>
+                        </div>
+
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(c) => handleRowSelect(order.id, !!c)}
+                          className="data-[state=checked]:bg-primary data-[state=checked]:border-primary border-white/20"
+                        />
+                      </div>
+
+                      {/* Middle Row: Content Grid */}
+                      <div className="grid grid-cols-2 gap-4 mb-4 pr-3">
+                        {/* Customer */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-white/5 to-transparent border border-white/5 flex items-center justify-center">
+                            <Users className="w-5 h-5 text-white/60" />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-xs text-white/40 mb-0.5">العميل</p>
+                            <p className="text-sm font-bold text-white truncate">{order.customerName}</p>
+                          </div>
+                        </div>
+
+                        {/* Price */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#f7941d]/10 to-transparent border border-[#f7941d]/20 flex items-center justify-center">
+                            <DollarSign className="w-5 h-5 text-[#f7941d]" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-white/40 mb-0.5">القيمة</p>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-lg font-black text-[#f7941d]">{order.sellingPriceLYD?.toFixed(0)}</span>
+                              <span className="text-xs text-[#f7941d]/70">د.ل</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bottom Row: Status & Actions */}
+                      <div className="flex items-center justify-between pr-3 pt-4 border-t border-white/5">
+                        <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 ${order.status === 'delivered' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
+                          order.status === 'cancelled' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                            'bg-primary/10 border-primary/20 text-primary'
+                          }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${order.status === 'delivered' ? 'bg-green-400' :
+                            order.status === 'cancelled' ? 'bg-red-400' :
+                              'bg-[#f7941d]'
+                            }`} />
+                          <span className="text-xs font-bold">{statusInfo.text}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-white/60 hover:text-white hover:bg-white/10" onClick={() => router.push(`/admin/orders/add?id=${order.id}`)}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-white/60 hover:text-white hover:bg-white/10">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 bg-[#1c1c1e] text-white border-white/10">
+                              <DropdownMenuLabel>خيارات الطلب</DropdownMenuLabel>
+                              <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-pointer" onClick={() => handleQuickEditClick(order)}>
+                                <Sparkles className="h-4 w-4 ml-2 text-primary" />
+                                تعديل سريع
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-pointer" onClick={() => handleWeightClick(order)}>
+                                <Scale className="h-4 w-4 ml-2" />
+                                إضافة وزن
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-pointer" onClick={() => window.open(`/admin/orders/${order.id}/print`, '_blank')}>
+                                <Printer className="h-4 w-4 ml-2" />
+                                طباعة الفاتورة
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-white/10" />
+                              <DropdownMenuItem className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer" onClick={() => handleDeleteClick(order)}>
+                                <Trash2 className="h-4 w-4 ml-2" />
+                                حذف الطلب
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
           </div>
         </CardContent>
       </Card>

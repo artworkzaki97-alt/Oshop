@@ -283,7 +283,8 @@ export default function SheinCardsPage() {
                         </Select>
                     </div>
 
-                    <div className="rounded-md border">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block rounded-md border">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -352,6 +353,86 @@ export default function SheinCardsPage() {
                                 )}
                             </TableBody>
                         </Table>
+                    </div>
+
+                    {/* Mobile Card List */}
+                    {/* Mobile Card List - Premium Dark */}
+                    <div className="md:hidden space-y-4 pb-24">
+                        {isLoading ? (
+                            <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
+                        ) : filteredCards.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                                <CreditCard className="h-10 w-10 opacity-30 mb-4" />
+                                <p className="text-center">لا توجد بطاقات مطابقة</p>
+                            </div>
+                        ) : (
+                            filteredCards.map((card) => (
+                                <div key={card.id} className="bg-[#1c1c1e] rounded-3xl border border-white/5 p-5 shadow-lg relative overflow-hidden group">
+                                    {/* Status Indicator Strip */}
+                                    <div className={`absolute top-0 right-0 w-1.5 h-full ${card.status === 'available' ? 'bg-green-500 shadow-[0_0_15px_#22c55e]' :
+                                            card.status === 'used' ? 'bg-blue-500 shadow-[0_0_15px_#3b82f6]' :
+                                                'bg-red-500 shadow-[0_0_15px_#ef4444]'
+                                        }`} />
+
+                                    <div className="pl-2">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <p className="text-xs text-white/40 mb-1">كود البطاقة</p>
+                                                <p className="font-mono font-bold text-xl text-white dir-ltr tracking-wider">
+                                                    {card.code.match(/.{1,4}/g)?.join(' ') || card.code}
+                                                </p>
+                                            </div>
+                                            <Badge variant="outline" className={`
+                                                ${card.status === 'available' ? 'border-green-500/30 text-green-400 bg-green-500/10' :
+                                                    card.status === 'used' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' :
+                                                        'border-red-500/30 text-red-400 bg-red-500/10'}
+                                            `}>
+                                                {card.status === 'available' ? 'متاح' : card.status === 'used' ? 'مستخدم' : 'منتهي'}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                                <div className="flex items-center gap-2 text-xs text-white/40 mb-1">
+                                                    <DollarSign className="w-3.5 h-3.5 text-green-500" />
+                                                    <span>القيمة الحالية</span>
+                                                </div>
+                                                <div className="font-bold text-xl text-white dir-ltr">
+                                                    {(card.remainingValue ?? card.value).toFixed(2)} <span className="text-sm text-green-500">$</span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
+                                                <div className="flex items-center gap-2 text-xs text-white/40 mb-1">
+                                                    <CreditCard className="w-3.5 h-3.5" />
+                                                    <span>القيمة الأصلية</span>
+                                                </div>
+                                                <div className="font-bold text-lg text-white/60 dir-ltr line-through decoration-white/20">
+                                                    {card.value.toFixed(2)} $
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-between items-center pt-3 border-t border-white/5">
+                                            <p className="text-xs text-white/30 font-mono">
+                                                {format(new Date(card.purchaseDate), 'yyyy-MM-dd')}
+                                            </p>
+
+                                            <div className="flex items-center gap-1">
+                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-white/60 hover:text-white hover:bg-white/10 rounded-xl" onClick={() => router.push(`/admin/shein-cards/${card.id}`)}>
+                                                    <Eye className="w-4 h-4" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-white/60 hover:text-white hover:bg-white/10 rounded-xl" onClick={() => handleOpenDialog(card)}>
+                                                    <Pencil className="w-4 h-4" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" className="h-9 w-9 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded-xl" onClick={() => handleDelete(card.id)}>
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </CardContent>
             </Card>
