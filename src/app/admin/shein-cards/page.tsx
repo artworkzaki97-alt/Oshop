@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { SheinCard, TreasuryCard } from '@/lib/types';
-import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, getTreasuryCards } from '@/lib/actions';
+import { SheinCard, TreasuryCard, TreasuryTransaction, SheinTransaction } from '@/lib/types';
+import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, getTreasuryCards, getSheinCardTransactions } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -43,6 +43,11 @@ export default function SheinCardsPage() {
     const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
     const [status, setStatus] = useState<'available' | 'used' | 'expired'>('available');
+
+    // Shein History State
+    const [viewHistoryCard, setViewHistoryCard] = useState<SheinCard | null>(null);
+    const [sheinHistory, setSheinHistory] = useState<SheinTransaction[]>([]);
+    const [sheinHistoryLoading, setSheinHistoryLoading] = useState(false);
 
     useEffect(() => {
         fetchCards();
@@ -298,6 +303,17 @@ export default function SheinCardsPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex justify-center gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={async () => {
+                                                        setViewHistoryCard(card);
+                                                        setSheinHistoryLoading(true);
+                                                        try {
+                                                            const data = await getSheinCardTransactions(card.id);
+                                                            setSheinHistory(data);
+                                                        } catch (e) { console.error(e); }
+                                                        setSheinHistoryLoading(false);
+                                                    }} title="سجل المعاملات">
+                                                        <FileText className="w-4 h-4 text-blue-600" />
+                                                    </Button>
                                                     <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(card)}>
                                                         <Pencil className="w-4 h-4" />
                                                     </Button>
@@ -479,6 +495,8 @@ export default function SheinCardsPage() {
                                             <TableHead className="text-right">التاريخ</TableHead>
                                             <TableHead className="text-center">النوع</TableHead>
                                             <TableHead className="text-center">المبلغ</TableHead>
+                                            <TableHead className="text-center">رقم الطلب</TableHead>
+                                            <TableHead className="text-right">العميل</TableHead>
                                             <TableHead className="text-right">ملاحظات</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -494,7 +512,18 @@ export default function SheinCardsPage() {
                                                 <TableCell className="text-center font-bold dir-ltr">
                                                     {tx.amount.toFixed(2)}
                                                 </TableCell>
-                                                <TableCell>{tx.description}</TableCell>
+                                                <TableCell className="text-center">
+                                                    {tx.orderNumber ? <Badge variant="outline">{tx.orderNumber}</Badge> : '-'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {tx.customerName ? (
+                                                        <div className="flex flex-col text-xs">
+                                                            <span className="font-medium">{tx.customerName}</span>
+                                                            <span className="text-muted-foreground">{tx.customerPhone}</span>
+                                                        </div>
+                                                    ) : '-'}
+                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">{tx.description}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -502,6 +531,58 @@ export default function SheinCardsPage() {
                             )}
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Shein History Dialog */}
+            <Dialog open={!!viewHistoryCard} onOpenChange={(open) => !open && setViewHistoryCard(null)}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>سجل معاملات البطاقة: {viewHistoryCard?.code}</DialogTitle>
+                        <DialogDescription>
+                            تفاصيل استخدام البطاقة والعمليات المرتبطة بها.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                        {sheinHistoryLoading ? (
+                            <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
+                        ) : sheinHistory.length === 0 ? (
+                            <p className="text-center text-muted-foreground p-8">لا يوجد سجل استخدام لهذه البطاقة (في النظام الجديد)</p>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="text-right">التاريخ</TableHead>
+                                        <TableHead className="text-center">القيمة المخصومة</TableHead>
+                                        <TableHead className="text-center">رقم الطلب</TableHead>
+                                        <TableHead className="text-right">العميل</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {sheinHistory.map((tx) => (
+                                        <TableRow key={tx.id}>
+                                            <TableCell>{format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}</TableCell>
+                                            <TableCell className="text-center font-bold text-red-600 dir-ltr">
+                                                -{tx.amount.toFixed(2)} $
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {tx.orderNumber ? <Badge variant="outline">{tx.orderNumber}</Badge> : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {tx.customerName ? (
+                                                    <div className="flex flex-col text-xs">
+                                                        <span className="font-medium">{tx.customerName}</span>
+                                                        <span className="text-muted-foreground">{tx.customerPhone}</span>
+                                                    </div>
+                                                ) : '-'}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

@@ -233,6 +233,11 @@ export default function LoginPage() {
                                     className="h-12 pr-10 text-right bg-slate-50 border-slate-200 focus:bg-white focus:border-orange-500 transition-all duration-200"
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
+                                    onFocus={(e) => {
+                                        if (e.target.value.startsWith('0')) {
+                                            setPhone(e.target.value.substring(1));
+                                        }
+                                    }}
                                     disabled={isLoading}
                                 />
                             </div>

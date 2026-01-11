@@ -36,6 +36,7 @@ const ExchangeRatePage = () => {
 
         const settingsToSave: Partial<AppSettings> = {
             exchangeRate: Number(settings.exchangeRate) || 0,
+            shippingExchangeRate: Number(settings.shippingExchangeRate) || 0,
             pricePerKiloUSD: Number(settings.pricePerKiloUSD) || 0,
             customerPricePerKiloUSD: Number(settings.customerPricePerKiloUSD) || 0,
         };
@@ -102,6 +103,20 @@ const ExchangeRatePage = () => {
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     السعر الافتراضي بالدولار الذي يضاف على فاتورة الزبون لكل كيلوغرام.
+                                </p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="shippingExchangeRate">سعر صرف الدولار الخاص بالشحن</Label>
+                                <Input
+                                    id="shippingExchangeRate"
+                                    type="number"
+                                    step="0.01"
+                                    value={settings.shippingExchangeRate || ''}
+                                    onChange={handleInputChange}
+                                    dir="ltr"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    هذا السعر سيتم استخدامه لحساب تكاليف الشحن من الدولار إلى الدينار. إذا ترك فارغًا سيتم استخدام سعر الصرف العام.
                                 </p>
                             </div>
                             <div className="space-y-2">

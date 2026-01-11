@@ -65,18 +65,18 @@ const AddTemporaryBatchForm = () => {
     const searchParams = useSearchParams();
     const orderId = searchParams.get('id');
     const { toast } = useToast();
-    
+
     const [subOrders, setSubOrders] = useState<SubOrder[]>([createNewSubOrder()]);
     const [invoiceNumber, setInvoiceNumber] = useState(`TEMP-BATCH-${Date.now().toString().slice(-6)}`);
     const [invoiceName, setInvoiceName] = useState(`فاتورة ${new Date().toLocaleDateString('ar-LY')}`);
-    
+
     const [isLoadingPage, setIsLoadingPage] = useState(!!orderId);
     const [isSaving, setIsSaving] = useState(false);
     const [allUsers, setAllUsers] = useState<AppUser[]>([]);
     const [representatives, setRepresentatives] = useState<Representative[]>([]);
     const [assignedUserId, setAssignedUserId] = useState<string | null>(null);
     const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
-    
+
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -116,7 +116,7 @@ const AddTemporaryBatchForm = () => {
         setSubOrders(subOrders.map(order => {
             if (order.subOrderId === id) {
                 const updatedOrder = { ...order, [field]: value };
-                
+
                 // Set username to phone number
                 if (field === 'customerPhone') {
                     updatedOrder.username = value;
@@ -125,7 +125,7 @@ const AddTemporaryBatchForm = () => {
                 if (field === 'sellingPriceLYD' || field === 'downPaymentLYD') {
                     updatedOrder.remainingAmount = updatedOrder.sellingPriceLYD - updatedOrder.downPaymentLYD;
                 }
-                 if(field === 'representativeId') {
+                if (field === 'representativeId') {
                     const rep = representatives.find(r => r.id === value);
                     updatedOrder.representativeName = rep?.name || null;
                 }
@@ -134,11 +134,11 @@ const AddTemporaryBatchForm = () => {
             return order;
         }));
     };
-    
+
     const handleUserSelect = (userId: string | null) => {
         setAssignedUserId(userId);
     }
-    
+
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text).then(() => {
             toast({ title: "تم النسخ!", description: `تم نسخ ${label} إلى الحافظة.` });
@@ -164,7 +164,7 @@ const AddTemporaryBatchForm = () => {
         return subOrders.reduce((acc, order) => acc + order.sellingPriceLYD, 0);
     }, [subOrders]);
 
-     const grandTotalProfit = useMemo(() => {
+    const grandTotalProfit = useMemo(() => {
         return calculatedTotals.reduce((acc, totals) => acc + totals.netProfit, 0);
     }, [calculatedTotals]);
 
@@ -174,35 +174,35 @@ const AddTemporaryBatchForm = () => {
 
 
     const handleSaveInvoice = async () => {
-         if (subOrders.some(so => !so.customerName || !so.customerPhone)) {
-             toast({
+        if (subOrders.some(so => !so.customerName || !so.customerPhone)) {
+            toast({
                 title: "بيانات ناقصة",
                 description: "الرجاء التأكد من إدخال اسم ورقم هاتف لكل عميل.",
                 variant: "destructive"
             });
             return;
-         }
-         setIsSaving(true);
+        }
+        setIsSaving(true);
 
-         const selectedUser = allUsers.find(u => u.id === assignedUserId);
+        const selectedUser = allUsers.find(u => u.id === assignedUserId);
 
-         const finalSubOrders: SubOrder[] = subOrders.map(so => ({
+        const finalSubOrders: SubOrder[] = subOrders.map(so => ({
             ...so,
             operationDate: so.operationDate ? new Date(so.operationDate).toISOString() : new Date().toISOString(),
             deliveryDate: so.deliveryDate ? new Date(so.deliveryDate).toISOString() : undefined,
-         }));
+        }));
 
-         const orderData: Partial<Omit<TempOrder, 'id'>> = {
-             invoiceName,
-             totalAmount: grandTotal,
-             remainingAmount: totalRemaining,
-             status: 'pending',
-             subOrders: finalSubOrders,
-             assignedUserId: assignedUserId,
-             assignedUserName: selectedUser?.name || null,
-         };
-         
-         try {
+        const orderData: Partial<Omit<TempOrder, 'id'>> = {
+            invoiceName,
+            totalAmount: grandTotal,
+            remainingAmount: totalRemaining,
+            status: 'pending',
+            subOrders: finalSubOrders,
+            assignedUserId: assignedUserId,
+            assignedUserName: selectedUser?.name || null,
+        };
+
+        try {
             if (orderId) {
                 await updateTempOrder(orderId, orderData);
                 toast({
@@ -211,24 +211,24 @@ const AddTemporaryBatchForm = () => {
                 });
             } else {
                 const addedOrder = await addTempOrder(orderData as Omit<TempOrder, 'id'>);
-                 if (!addedOrder) throw new Error("Failed to add temp order");
+                if (!addedOrder) throw new Error("Failed to add temp order");
 
-                 toast({
+                toast({
                     title: "تم الحفظ بنجاح",
                     description: `تم حفظ الفاتورة المجمعة ${invoiceName}.`
                 });
             }
             router.push('/admin/temporary-users');
-         } catch(error) {
+        } catch (error) {
             console.error(error);
             toast({
                 title: "خطأ",
                 description: "فشل حفظ الفاتورة المجمعة.",
                 variant: "destructive"
             });
-         } finally {
+        } finally {
             setIsSaving(false);
-         }
+        }
     };
 
 
@@ -256,11 +256,11 @@ const AddTemporaryBatchForm = () => {
                     </div>
                 </div>
                 <div className='w-full max-w-xs'>
-                     <Input 
+                    <Input
                         placeholder="اسم الفاتورة (مثال: شحنة شي إن 25/7)"
                         value={invoiceName}
                         onChange={(e) => setInvoiceName(e.target.value)}
-                     />
+                    />
                 </div>
             </header>
 
@@ -268,48 +268,48 @@ const AddTemporaryBatchForm = () => {
                 <Card>
                     <CardHeader>
                         <CardTitle>إسناد الفاتورة بالكامل لمستخدم (اختياري)</CardTitle>
-                         <CardContent className="pt-6 space-y-4">
-                           <FormField label="ابحث عن مستخدم مسجل لإسناد الدين إليه" id="assign-user">
-                               <Popover open={isUserSearchOpen} onOpenChange={setIsUserSearchOpen}>
-                                   <PopoverTrigger asChild>
-                                       <Button
-                                       variant="outline"
-                                       role="combobox"
-                                       aria-expanded={isUserSearchOpen}
-                                       className="w-full justify-between"
-                                       >
-                                       {assignedUserId
-                                           ? allUsers.find((user) => user.id === assignedUserId)?.name
-                                           : "اختر مستخدم..."}
-                                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                       </Button>
-                                   </PopoverTrigger>
-                                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                       <Command>
-                                           <CommandInput placeholder="ابحث بالاسم، اسم المستخدم، أو الهاتف..." />
-                                           <CommandList>
-                                               <CommandEmpty>لم يتم العثور على مستخدم.</CommandEmpty>
-                                               <CommandGroup>
-                                                   <CommandItem onSelect={() => { handleUserSelect(null); setIsUserSearchOpen(false); }}>
-                                                       <Check className={cn("mr-2 h-4 w-4", !assignedUserId ? "opacity-100" : "opacity-0")} />
-                                                       بدون إسناد
-                                                   </CommandItem>
-                                                   {allUsers.map((user) => (
-                                                   <CommandItem
-                                                       key={user.id}
-                                                       value={`${user.name} ${user.username} ${user.phone}`}
-                                                       onSelect={() => { handleUserSelect(user.id); setIsUserSearchOpen(false); }}
-                                                   >
-                                                       <Check className={cn("mr-2 h-4 w-4", assignedUserId === user.id ? "opacity-100" : "opacity-0")} />
-                                                       {user.name} ({user.username})
-                                                   </CommandItem>
-                                                   ))}
-                                               </CommandGroup>
-                                           </CommandList>
-                                       </Command>
-                                   </PopoverContent>
-                               </Popover>
-                           </FormField>
+                        <CardContent className="pt-6 space-y-4">
+                            <FormField label="ابحث عن مستخدم مسجل لإسناد الدين إليه" id="assign-user">
+                                <Popover open={isUserSearchOpen} onOpenChange={setIsUserSearchOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={isUserSearchOpen}
+                                            className="w-full justify-between"
+                                        >
+                                            {assignedUserId
+                                                ? allUsers.find((user) => user.id === assignedUserId)?.name
+                                                : "اختر مستخدم..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                        <Command>
+                                            <CommandInput placeholder="ابحث بالاسم، اسم المستخدم، أو الهاتف..." />
+                                            <CommandList>
+                                                <CommandEmpty>لم يتم العثور على مستخدم.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem onSelect={() => { handleUserSelect(null); setIsUserSearchOpen(false); }}>
+                                                        <Check className={cn("mr-2 h-4 w-4", !assignedUserId ? "opacity-100" : "opacity-0")} />
+                                                        بدون إسناد
+                                                    </CommandItem>
+                                                    {allUsers.map((user) => (
+                                                        <CommandItem
+                                                            key={user.id}
+                                                            value={`${user.name} ${user.username} ${user.phone}`}
+                                                            onSelect={() => { handleUserSelect(user.id); setIsUserSearchOpen(false); }}
+                                                        >
+                                                            <Check className={cn("mr-2 h-4 w-4", assignedUserId === user.id ? "opacity-100" : "opacity-0")} />
+                                                            {user.name} ({user.username})
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </FormField>
                         </CardContent>
                     </CardHeader>
                 </Card>
@@ -327,18 +327,29 @@ const AddTemporaryBatchForm = () => {
                             </div>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
-                             {/* Customer Info */}
+                            {/* Customer Info */}
                             <div className="space-y-4 p-4 border rounded-lg bg-background/30">
                                 <h3 className='font-semibold'>1. بيانات العميل المؤقت</h3>
                                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <FormField label="اسم العميل المؤقت" id={`customer-name-${order.subOrderId}`}>
-                                        <Input value={order.customerName} onChange={e => handleSubOrderChange(order.subOrderId, 'customerName', e.target.value)} placeholder="الاسم الكامل للعميل" className="bg-transparent"/>
+                                        <Input value={order.customerName} onChange={e => handleSubOrderChange(order.subOrderId, 'customerName', e.target.value)} placeholder="الاسم الكامل للعميل" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="رقم هاتف العميل" id={`customer-phone-${order.subOrderId}`}>
-                                        <Input value={order.customerPhone} onChange={e => handleSubOrderChange(order.subOrderId, 'customerPhone', e.target.value)} placeholder="09xxxxxxxx" dir="ltr" className="bg-transparent"/>
+                                        <Input
+                                            value={order.customerPhone}
+                                            onChange={e => handleSubOrderChange(order.subOrderId, 'customerPhone', e.target.value)}
+                                            onFocus={(e) => {
+                                                if (e.target.value.startsWith('0')) {
+                                                    handleSubOrderChange(order.subOrderId, 'customerPhone', e.target.value.substring(1));
+                                                }
+                                            }}
+                                            placeholder="09xxxxxxxx"
+                                            dir="ltr"
+                                            className="bg-transparent"
+                                        />
                                     </FormField>
                                     <FormField label="العنوان" id={`customer-address-${order.subOrderId}`}>
-                                        <Input value={order.customerAddress} onChange={e => handleSubOrderChange(order.subOrderId, 'customerAddress', e.target.value)} placeholder="المدينة، الشارع" className="bg-transparent"/>
+                                        <Input value={order.customerAddress} onChange={e => handleSubOrderChange(order.subOrderId, 'customerAddress', e.target.value)} placeholder="المدينة، الشارع" className="bg-transparent" />
                                     </FormField>
                                 </div>
                                 <Separator />
@@ -346,37 +357,37 @@ const AddTemporaryBatchForm = () => {
                                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <FormField label="اسم المستخدم (رقم الهاتف)" id={`username-${order.subOrderId}`}>
                                         <div className="flex items-center">
-                                            <Input value={order.username} readOnly className="bg-muted/50"/>
-                                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(order.username, 'اسم المستخدم')}><Copy className="w-4 h-4"/></Button>
+                                            <Input value={order.username} readOnly className="bg-muted/50" />
+                                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(order.username, 'اسم المستخدم')}><Copy className="w-4 h-4" /></Button>
                                         </div>
                                     </FormField>
                                     <FormField label="كلمة المرور" id={`password-${order.subOrderId}`}>
-                                         <div className="flex items-center">
-                                            <Input value={order.password || ''} readOnly className="bg-muted/50"/>
-                                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(order.password || '', 'كلمة المرور')}><Copy className="w-4 h-4"/></Button>
+                                        <div className="flex items-center">
+                                            <Input value={order.password || ''} readOnly className="bg-muted/50" />
+                                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(order.password || '', 'كلمة المرور')}><Copy className="w-4 h-4" /></Button>
                                         </div>
                                     </FormField>
-                                     <FormField label="كود التتبع" id={`trackingId-${order.subOrderId}`}>
-                                         <div className="flex items-center">
-                                            <Input value={order.trackingId || ''} readOnly className="bg-muted/50" dir="ltr"/>
-                                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(order.trackingId || '', 'كود التتبع')}><Copy className="w-4 h-4"/></Button>
+                                    <FormField label="كود التتبع" id={`trackingId-${order.subOrderId}`}>
+                                        <div className="flex items-center">
+                                            <Input value={order.trackingId || ''} readOnly className="bg-muted/50" dir="ltr" />
+                                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(order.trackingId || '', 'كود التتبع')}><Copy className="w-4 h-4" /></Button>
                                         </div>
                                     </FormField>
                                 </div>
                             </div>
-                            
+
                             {/* Operation Details */}
                             <div className="space-y-4 p-4 border rounded-lg bg-background/30">
                                 <h3 className='font-semibold'>2. تفاصيل العملية</h3>
                                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <FormField label="سعر الشراء (بالدولار)" id={`purchase-price-${order.subOrderId}`}>
-                                        <Input type="number" value={order.purchasePriceUSD} onChange={e => handleSubOrderChange(order.subOrderId, 'purchasePriceUSD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent"/>
+                                        <Input type="number" value={order.purchasePriceUSD} onChange={e => handleSubOrderChange(order.subOrderId, 'purchasePriceUSD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="سعر البيع (دينار)" id={`selling-price-${order.subOrderId}`}>
-                                        <Input type="number" value={order.sellingPriceLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'sellingPriceLYD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent"/>
+                                        <Input type="number" value={order.sellingPriceLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'sellingPriceLYD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="المقدم (دينار)" id={`down-payment-${order.subOrderId}`}>
-                                        <Input type="number" value={order.downPaymentLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'downPaymentLYD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent"/>
+                                        <Input type="number" value={order.downPaymentLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'downPaymentLYD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="الباقي (دينار)" id={`remaining-${order.subOrderId}`}>
                                         <Input value={calculatedTotals[index].remainingAmount.toFixed(2)} readOnly className="bg-muted/50 font-bold" dir="ltr" />
@@ -389,7 +400,7 @@ const AddTemporaryBatchForm = () => {
                                             <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="card" id={`card-${order.subOrderId}`} /><Label htmlFor={`card-${order.subOrderId}`}>بطاقة مصرفية</Label></div>
                                         </RadioGroup>
                                     </FormField>
-                                     <FormField label="إسناد إلى مندوب" id={`rep-${order.subOrderId}`}>
+                                    <FormField label="إسناد إلى مندوب" id={`rep-${order.subOrderId}`}>
                                         <Select value={order.representativeId || 'none'} onValueChange={(val) => handleSubOrderChange(order.subOrderId, 'representativeId', val === 'none' ? null : val)}>
                                             <SelectTrigger><SelectValue placeholder="اختر مندوبًا..." /></SelectTrigger>
                                             <SelectContent>
@@ -402,13 +413,13 @@ const AddTemporaryBatchForm = () => {
                                     </FormField>
                                 </div>
                             </div>
-                            
+
                         </CardContent>
                     </Card>
                 ))}
 
                 <Button variant="secondary" className="w-full gap-2" onClick={handleAddSubOrder}>
-                    <PlusCircle className="w-4 h-4"/>
+                    <PlusCircle className="w-4 h-4" />
                     إضافة طلب فرعي آخر للفاتورة
                 </Button>
 
@@ -418,22 +429,22 @@ const AddTemporaryBatchForm = () => {
                     </CardHeader>
                     <CardContent className="grid grid-cols-2 gap-4 text-center">
                         <div>
-                             <Label className="text-sm text-muted-foreground">إجمالي قيمة البيع</Label>
+                            <Label className="text-sm text-muted-foreground">إجمالي قيمة البيع</Label>
                             <p className="text-3xl font-bold text-primary">{grandTotal.toFixed(2)} د.ل</p>
                         </div>
                         <div>
-                             <Label className="text-sm text-muted-foreground">إجمالي صافي الربح</Label>
-                             <p className={`text-3xl font-bold ${grandTotalProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{grandTotalProfit.toFixed(2)} د.ل</p>
+                            <Label className="text-sm text-muted-foreground">إجمالي صافي الربح</Label>
+                            <p className={`text-3xl font-bold ${grandTotalProfit >= 0 ? 'text-green-600' : 'text-destructive'}`}>{grandTotalProfit.toFixed(2)} د.ل</p>
                         </div>
                     </CardContent>
                 </Card>
-                
+
                 <div className="flex justify-end gap-2 mt-8">
-                     <Button variant="outline" onClick={() => router.back()}>إلغاء</Button>
-                     <Button size="lg" onClick={handleSaveInvoice} disabled={isSaving}>
-                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                         {orderId ? 'حفظ التعديلات' : 'حفظ الفاتورة المجمعة'}
-                     </Button>
+                    <Button variant="outline" onClick={() => router.back()}>إلغاء</Button>
+                    <Button size="lg" onClick={handleSaveInvoice} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {orderId ? 'حفظ التعديلات' : 'حفظ الفاتورة المجمعة'}
+                    </Button>
                 </div>
             </main>
         </>
@@ -452,7 +463,7 @@ const FormField = ({ id, label, children, icon }: { id: string, label: string, c
 );
 
 const DatePopover = ({ date, setDate }: { date?: Date | string, setDate: (date?: Date) => void }) => (
-     <Popover>
+    <Popover>
         <PopoverTrigger asChild>
             <Button
                 variant={"outline"}

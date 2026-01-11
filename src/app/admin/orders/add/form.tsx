@@ -67,6 +67,7 @@ const AddOrderForm = () => {
 
     const [purchasePriceUSD, setPurchasePriceUSD] = useState(0);
     const [costExchangeRate, setCostExchangeRate] = useState(0);
+    const [shippingExchangeRate, setShippingExchangeRate] = useState(0); // Added
     const [sellingPriceLYD, setSellingPriceLYD] = useState(0);
     const [downPaymentLYD, setDownPaymentLYD] = useState(0);
     const [weightKG, setWeightKG] = useState(0);
@@ -93,6 +94,8 @@ const AddOrderForm = () => {
     const [availableCards, setAvailableCards] = useState<SheinCard[]>([]);
     const [selectedCardId, setSelectedCardId] = useState<string>('none');
     const [isAnalyzingCards, setIsAnalyzingCards] = useState<boolean>(false); // Keep for loading state if needed
+    const [manualCardAmount, setManualCardAmount] = useState<number | null>(null);
+    const [manualTreasuryAmount, setManualTreasuryAmount] = useState<number | null>(null);
 
     const [isUploading, setIsUploading] = useState(false);
 
@@ -134,6 +137,8 @@ const AddOrderForm = () => {
                         setCustomerAddress(existingOrder.customerAddress || '');
                         setPurchasePriceUSD(existingOrder.purchasePriceUSD || 0);
                         setCostExchangeRate(existingOrder.exchangeRate || settings.exchangeRate || 0);
+                        // Use saved shipping rate, or existing general rate if not set (backward compat), or system default
+                        setShippingExchangeRate(existingOrder.shippingExchangeRate || existingOrder.exchangeRate || settings.shippingExchangeRate || settings.exchangeRate || 0);
 
                         const customerCostLYD = (existingOrder.customerWeightCost || 0) * (existingOrder.weightKG || 0);
                         const addedCostInLYD = (existingOrder.addedCostUSD || 0) * (existingOrder.exchangeRate || settings.exchangeRate || 1);
@@ -185,6 +190,7 @@ const AddOrderForm = () => {
                     setCustomerWeightCost(settings.customerPricePerKiloUSD ?? 0);
                     setCustomerWeightCostCurrency('USD');
                     setCostExchangeRate(settings.exchangeRate || 0);
+                    setShippingExchangeRate(settings.shippingExchangeRate || settings.exchangeRate || 0); // Default to shipping rate or general rate
                 }
 
             } catch (error) {
@@ -263,25 +269,25 @@ const AddOrderForm = () => {
     const purchaseCostLYD = useMemo(() => purchasePriceUSD * costExchangeRate, [purchasePriceUSD, costExchangeRate]);
     const shippingCostLYD = useMemo(() => {
         if (pricePerKiloCurrency === 'USD') {
-            return weightKG * pricePerKilo * (appSettings?.exchangeRate ?? 1);
+            return weightKG * pricePerKilo * (shippingExchangeRate || appSettings?.exchangeRate || 1);
         }
         return weightKG * pricePerKilo;
-    }, [weightKG, pricePerKilo, pricePerKiloCurrency, appSettings]);
+    }, [weightKG, pricePerKilo, pricePerKiloCurrency, appSettings, shippingExchangeRate]);
 
     const customerWeightCostLYD = useMemo(() => {
         const costPerKilo = customerWeightCost;
         if (customerWeightCostCurrency === 'USD') {
-            return (costPerKilo * weightKG) * (appSettings?.exchangeRate ?? 1);
+            return (costPerKilo * weightKG) * (shippingExchangeRate || appSettings?.exchangeRate || 1);
         }
         return costPerKilo * weightKG;
-    }, [customerWeightCost, weightKG, customerWeightCostCurrency, appSettings]);
+    }, [customerWeightCost, weightKG, customerWeightCostCurrency, appSettings, shippingExchangeRate]);
 
     const addedCostLYD = useMemo(() => {
         if (addedCostCurrency === 'USD') {
-            return addedCost * (appSettings?.exchangeRate ?? 1);
+            return addedCost * (costExchangeRate || appSettings?.exchangeRate || 1); // Added cost usually follows purchase rate or specified rate? Assuming cost rate.
         }
         return addedCost;
-    }, [addedCost, addedCostCurrency, appSettings]);
+    }, [addedCost, addedCostCurrency, appSettings, costExchangeRate]);
 
     const finalSellingPrice = useMemo(() => sellingPriceLYD + customerWeightCostLYD + addedCostLYD, [sellingPriceLYD, customerWeightCostLYD, addedCostLYD]);
     const remainingAmount = useMemo(() => finalSellingPrice - downPaymentLYD, [finalSellingPrice, downPaymentLYD]);
@@ -376,6 +382,7 @@ const AddOrderForm = () => {
                 const updateData: Partial<Omit<Order, 'id'>> = {
                     ...commonOrderData,
                     exchangeRate: costExchangeRate,
+                    shippingExchangeRate: shippingExchangeRate, // Added
                     representativeId: orderData.representativeId,
                     representativeName: orderData.representativeName,
                     collectedAmount: orderData.collectedAmount,
@@ -388,6 +395,7 @@ const AddOrderForm = () => {
                 const newOrderData: Omit<Order, 'id' | 'invoiceNumber'> = {
                     ...commonOrderData,
                     exchangeRate: costExchangeRate,
+                    shippingExchangeRate: shippingExchangeRate, // Added
                     representativeId: null,
                     representativeName: null,
                     collectedAmount: 0,
@@ -401,7 +409,14 @@ const AddOrderForm = () => {
 
                 // --- HYBRID DEDUCTION LOGIC ---
                 try {
-                    await processCostDeduction(savedOrder.id, savedOrder.invoiceNumber, purchasePriceUSD, selectedCardId);
+                    await processCostDeduction(
+                        savedOrder.id,
+                        savedOrder.invoiceNumber,
+                        purchasePriceUSD,
+                        selectedCardId,
+                        manualCardAmount ?? undefined,
+                        manualTreasuryAmount ?? undefined
+                    );
                 } catch (deductError) {
                     console.error("Deduction Error:", deductError);
                     toast({ title: "تحذير", description: "تم حفظ الطلب لكن فشل خصم التكلفة.", variant: "destructive" });
@@ -474,7 +489,10 @@ const AddOrderForm = () => {
                                         {isUsersLoading
                                             ? "جاري تحميل المستخدمين..."
                                             : selectedUserId
-                                                ? users.find((user) => user.id === selectedUserId)?.name
+                                                ? (() => {
+                                                    const u = users.find((user) => user.id === selectedUserId);
+                                                    return u ? `${u.name} (${u.username})` : "ابحث عن مستخدم...";
+                                                })()
                                                 : "ابحث عن مستخدم..."}
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -547,7 +565,18 @@ const AddOrderForm = () => {
                             <Input id="customer-name" placeholder="الاسم الكامل للعميل" value={customerName} onChange={e => setCustomerName(e.target.value)} />
                         </FormField>
                         <FormField label="رقم الهاتف" id="customer-phone">
-                            <Input id="customer-phone" placeholder="09xxxxxxxx" dir="ltr" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} />
+                            <Input
+                                id="customer-phone"
+                                placeholder="09xxxxxxxx"
+                                dir="ltr"
+                                value={customerPhone}
+                                onChange={e => setCustomerPhone(e.target.value)}
+                                onFocus={(e) => {
+                                    if (e.target.value.startsWith('0')) {
+                                        setCustomerPhone(e.target.value.substring(1));
+                                    }
+                                }}
+                            />
                         </FormField>
                     </div>
                     <div className="pt-4">
@@ -564,6 +593,9 @@ const AddOrderForm = () => {
                         </FormField>
                         <FormField label="سعر صرف التكلفة" id="cost-exchange-rate">
                             <Input type="number" id="cost-exchange-rate" value={costExchangeRate} onChange={e => setCostExchangeRate(parseFloat(e.target.value) || 0)} dir="ltr" />
+                        </FormField>
+                        <FormField label="سعر صرف الشحن" id="shipping-exchange-rate">
+                            <Input type="number" id="shipping-exchange-rate" value={shippingExchangeRate} onChange={e => setShippingExchangeRate(parseFloat(e.target.value) || 0)} dir="ltr" />
                         </FormField>
                         <FormField label="سعر البيع الأساسي (دينار)" id="selling-price-lyd">
                             <Input type="number" id="selling-price-lyd" value={sellingPriceLYD} onChange={e => setSellingPriceLYD(parseFloat(e.target.value) || 0)} dir="ltr" />
@@ -730,7 +762,12 @@ const AddOrderForm = () => {
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>استخدام بطاقة Shein (اختياري)</Label>
-                            <Select value={selectedCardId} onValueChange={setSelectedCardId}>
+                            <Select value={selectedCardId} onValueChange={(val) => {
+                                setSelectedCardId(val);
+                                // Reset manuals to auto-calc when card changes
+                                setManualCardAmount(null);
+                                setManualTreasuryAmount(null);
+                            }}>
                                 <SelectTrigger className="w-full text-left font-mono" dir="ltr">
                                     <SelectValue placeholder="اختر بطاقة..." />
                                 </SelectTrigger>
@@ -745,6 +782,62 @@ const AddOrderForm = () => {
                             </Select>
                         </div>
 
+                        {/* Manual Amounts Inputs */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>الخصم من البطاقة ($)</Label>
+                                <Input
+                                    type="number"
+                                    dir="ltr"
+                                    value={(() => {
+                                        // If manual is set, use it. Else calculate auto default for visual
+                                        if (manualCardAmount !== null) return manualCardAmount;
+                                        // Auto Calc
+                                        const card = availableCards.find(c => c.id === selectedCardId);
+                                        if (!card || selectedCardId === 'none') return 0;
+                                        const balance = card.remainingValue ?? card.value ?? 0;
+                                        return Math.min(balance, purchasePriceUSD);
+                                    })()}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setManualCardAmount(isNaN(val) ? 0 : val);
+                                    }}
+                                    disabled={selectedCardId === 'none'}
+                                    className={manualCardAmount !== null ? "border-orange-500" : ""}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>الخصم من الخزينة USDT ($)</Label>
+                                <Input
+                                    type="number"
+                                    dir="ltr"
+                                    value={(() => {
+                                        // If manual is set, use it. Else calculate auto default
+                                        if (manualTreasuryAmount !== null) return manualTreasuryAmount;
+                                        // Auto Calc
+                                        const card = availableCards.find(c => c.id === selectedCardId);
+                                        let fromCard = 0;
+                                        if (card && selectedCardId !== 'none') {
+                                            // If card amount is manually set, respect it to calc remainder
+                                            if (manualCardAmount !== null) {
+                                                const balance = card.remainingValue ?? card.value ?? 0;
+                                                fromCard = Math.min(balance, manualCardAmount);
+                                            } else {
+                                                const balance = card.remainingValue ?? card.value ?? 0;
+                                                fromCard = Math.min(balance, purchasePriceUSD);
+                                            }
+                                        }
+                                        return Math.max(0, purchasePriceUSD - fromCard);
+                                    })()}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        setManualTreasuryAmount(isNaN(val) ? 0 : val);
+                                    }}
+                                    className={manualTreasuryAmount !== null ? "border-orange-500" : ""}
+                                />
+                            </div>
+                        </div>
+
                         {/* Breakdown Display */}
                         <div className="bg-muted/30 p-3 rounded-md text-sm space-y-1 font-mono" dir="ltr">
                             <div className="flex justify-between">
@@ -754,7 +847,13 @@ const AddOrderForm = () => {
                             {selectedCardId !== 'none' && (() => {
                                 const card = availableCards.find(c => c.id === selectedCardId);
                                 const balance = card?.remainingValue ?? card?.value ?? 0;
-                                const deduct = Math.min(balance, purchasePriceUSD);
+                                let deduct = 0;
+                                if (manualCardAmount !== null) {
+                                    deduct = Math.min(balance, manualCardAmount);
+                                } else {
+                                    deduct = Math.min(balance, purchasePriceUSD);
+                                }
+
                                 return (
                                     <div className="flex justify-between text-green-600">
                                         <span>From Card ({card?.code.substring(0, 4)}...):</span>
@@ -766,17 +865,38 @@ const AddOrderForm = () => {
                                 <span>From Treasury:</span>
                                 <span className="font-bold">
                                     {(() => {
+                                        if (manualTreasuryAmount !== null) return manualTreasuryAmount.toFixed(2);
+
                                         const card = availableCards.find(c => c.id === selectedCardId);
-                                        const balance = selectedCardId !== 'none' ? (card?.remainingValue ?? card?.value ?? 0) : 0;
-                                        const fromTreasury = Math.max(0, purchasePriceUSD - Math.min(balance, purchasePriceUSD));
+                                        let fromCard = 0;
+                                        if (card && selectedCardId !== 'none') {
+                                            if (manualCardAmount !== null) {
+                                                fromCard = Math.min(card.remainingValue ?? card.value, manualCardAmount);
+                                            } else {
+                                                fromCard = Math.min(card.remainingValue ?? card.value, purchasePriceUSD);
+                                            }
+                                        }
+                                        const fromTreasury = Math.max(0, purchasePriceUSD - fromCard);
                                         return fromTreasury.toFixed(2);
                                     })()} $
                                 </span>
                             </div>
+                            {(manualCardAmount !== null || manualTreasuryAmount !== null) && (
+                                <div className="text-xs text-orange-600 mt-2 text-right" dir="rtl">
+                                    * تم تعيين قيم يدوية للخصم.
+                                    <Button
+                                        variant="link"
+                                        className="h-auto p-0 mr-1 text-xs"
+                                        onClick={() => {
+                                            setManualCardAmount(null);
+                                            setManualTreasuryAmount(null);
+                                        }}
+                                    >
+                                        إعادة للوضع التلقائي
+                                    </Button>
+                                </div>
+                            )}
                         </div>
-                        <p className="text-xs text-muted-foreground text-right" dir="rtl">
-                            * سيتم خصم المبلغ من البطاقة أولاً، ثم استكمال الباقي من خزينة USDT تلقائياً.
-                        </p>
                     </div>
                 </FormSection>
 

@@ -240,7 +240,17 @@ const AdminManagersPage = () => {
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="phone" className="text-right">رقم الهاتف</Label>
-                  <Input id="phone" name="phone" defaultValue={currentManager?.phone} className="col-span-3" />
+                  <Input
+                    id="phone"
+                    name="phone"
+                    defaultValue={currentManager?.phone}
+                    className="col-span-3"
+                    onFocus={(e) => {
+                      if (e.target.value.startsWith('0')) {
+                        e.target.value = e.target.value.substring(1);
+                      }
+                    }}
+                  />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="password" className="text-right">كلمة السر</Label>

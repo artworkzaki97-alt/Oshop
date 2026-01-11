@@ -10,12 +10,13 @@ import { supabaseAdmin } from "./supabase-admin";
 import {
     Manager, User, Representative, Order, Transaction, TempOrder, Conversation, Message, Notification,
     AppSettings, OrderStatus, Expense, Deposit, DepositStatus, ExternalDebt, Creditor, ManualShippingLabel,
-    SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard, TreasuryTransaction, WalletTransaction, TreasuryCard
+    SubOrder, InstantSale, SystemSettings, Product, GlobalSite, SheinCard, TreasuryTransaction, WalletTransaction, TreasuryCard, SheinTransaction
 } from "./types";
 
 // ... (existing code)
 
 const SHEIN_CARDS_COLLECTION = 'shein_cards_v4';
+const SHEIN_TRANSACTIONS_COLLECTION = 'shein_transactions_v4';
 const TREASURY_COLLECTION = 'treasury_transactions_v4';
 const TREASURY_CARDS_COLLECTION = 'treasury_cards_v4';
 
@@ -218,6 +219,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
 
         return {
             exchangeRate: data.exchangeRate || 5.0,
+            shippingExchangeRate: data.shippingExchangeRate || data.exchangeRate || 5.0, // Default to exchangeRate if not set
             shippingCostUSD: data.shippingCostUSD || 4.5,
             shippingPriceUSD: data.shippingPriceUSD || 5.0
         };
@@ -225,6 +227,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
         console.error("Error in getSystemSettings:", error);
         return {
             exchangeRate: 5.0,
+            shippingExchangeRate: 5.0,
             shippingCostUSD: 4.5,
             shippingPriceUSD: 5.0
         };
@@ -251,6 +254,7 @@ export async function updateSystemSettings(data: Partial<SystemSettings>): Promi
         };
 
         if (data.exchangeRate !== undefined) updateData.exchangeRate = data.exchangeRate;
+        if (data.shippingExchangeRate !== undefined) updateData.shippingExchangeRate = data.shippingExchangeRate;
         if (data.shippingCostUSD !== undefined) updateData.shippingCostUSD = data.shippingCostUSD;
         if (data.shippingPriceUSD !== undefined) updateData.shippingPriceUSD = data.shippingPriceUSD;
 
@@ -272,6 +276,7 @@ export async function updateSystemSettings(data: Partial<SystemSettings>): Promi
                 .insert({
                     ...updateData,
                     exchangeRate: data.exchangeRate || 5.0,
+                    shippingExchangeRate: data.shippingExchangeRate || data.exchangeRate || 5.0,
                     shippingCostUSD: data.shippingCostUSD || 4.5,
                     shippingPriceUSD: data.shippingPriceUSD || 5.0,
                     createdAt: new Date().toISOString()
@@ -309,6 +314,7 @@ export async function updateAppSettings(data: Partial<AppSettings>): Promise<boo
     // Map AppSettings fields to SystemSettings fields
     return await updateSystemSettings({
         exchangeRate: data.exchangeRate,
+        shippingExchangeRate: data.shippingExchangeRate,
         shippingCostUSD: data.pricePerKiloUSD, // Company cost per kilo
         shippingPriceUSD: data.customerPricePerKiloUSD, // Customer price per kilo
     });
@@ -2444,6 +2450,37 @@ export async function getAvailableSheinCards(): Promise<SheinCard[]> {
     }
 }
 
+export async function getSheinCardTransactions(cardId: string): Promise<SheinTransaction[]> {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from(SHEIN_TRANSACTIONS_COLLECTION)
+            .select('*')
+            .eq('cardId', cardId)
+            .order('createdAt', { ascending: false });
+
+        if (error) throw error;
+
+        const transactions = (data || []) as SheinTransaction[];
+
+        // Enrich with Order Details
+        const orderIds = transactions.map(t => t.orderId).filter(Boolean);
+        if (orderIds.length > 0) {
+            const uniqueOrderIds = [...new Set(orderIds)];
+            const orders = await getOrdersByIds(uniqueOrderIds);
+
+            return transactions.map(t => {
+                const order = orders.find(o => o.id === t.orderId);
+                return order ? { ...t, orderNumber: order.invoiceNumber, customerName: order.customerName, customerPhone: order.customerPhone } : t;
+            });
+        }
+
+        return transactions;
+    } catch (error) {
+        console.error("Error getting shein card transactions:", error);
+        return [];
+    }
+}
+
 export async function addSheinCard(card: Omit<SheinCard, 'id'>): Promise<SheinCard | null> {
     try {
         const cardWithRemaining = {
@@ -2635,15 +2672,39 @@ export async function getTreasuryTransactions(cardId?: string): Promise<Treasury
         const { data, error } = await query;
 
         if (error) throw error;
-        return (data || []) as TreasuryTransaction[];
+
+        const transactions = (data || []) as TreasuryTransaction[];
+
+        // Enrich with Order Details
+        const orderIds = transactions.map(t => t.relatedOrderId).filter(id => id) as string[];
+        if (orderIds.length > 0) {
+            const uniqueOrderIds = [...new Set(orderIds)];
+            const orders = await getOrdersByIds(uniqueOrderIds);
+
+            return transactions.map(t => {
+                if (!t.relatedOrderId) return t;
+                const order = orders.find(o => o.id === t.relatedOrderId);
+                if (order) {
+                    return {
+                        ...t,
+                        orderNumber: order.invoiceNumber,
+                        customerName: order.customerName,
+                        customerPhone: order.customerPhone // Requires Order interface to have customerName
+                    };
+                }
+                return t;
+            });
+        }
+
+        return transactions;
     } catch (error) {
         console.error("Error getting treasury transactions:", error);
         return [];
     }
 }
 
-export async function processCostDeduction(orderId: string, invoiceNumber: string, totalCost: number, selectedCardId?: string) {
-    console.log(`[processCostDeduction] Order: ${invoiceNumber}, Cost: ${totalCost}, Card: ${selectedCardId}`);
+export async function processCostDeduction(orderId: string, invoiceNumber: string, totalCost: number, selectedCardId?: string, manualCardAmount?: number, manualTreasuryAmount?: number) {
+    console.log(`[processCostDeduction] Order: ${invoiceNumber}, Cost: ${totalCost}, Card: ${selectedCardId}, ManualCard: ${manualCardAmount}, ManualTreasury: ${manualTreasuryAmount}`);
     let remainingCost = totalCost;
 
     // 1. Card Deduction
@@ -2656,7 +2717,11 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
 
         if (card) {
             const available = card.remainingValue ?? card.value;
-            const deduct = Math.min(available, remainingCost);
+            // Use manual amount if provided, otherwise try to cover as much of the remaining cost as possible
+            let targetCardDeduction = manualCardAmount !== undefined ? manualCardAmount : remainingCost;
+
+            // Cannot deduct more than available
+            const deduct = Math.min(available, targetCardDeduction);
 
             if (deduct > 0) {
                 console.log(`[processCostDeduction] Deducting ${deduct} from Card ${card.code}`);
@@ -2664,8 +2729,17 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
                     remainingValue: available - deduct,
                     status: (available - deduct < 0.01) ? 'used' : 'available',
                     usedAt: new Date().toISOString(),
-                    usedForOrderId: orderId // Note: if used for multiple, this overwrites. Acceptable for now.
+                    usedForOrderId: orderId
                 });
+
+                // Add Log
+                await supabaseAdmin.from(SHEIN_TRANSACTIONS_COLLECTION).insert({
+                    cardId: card.id,
+                    amount: deduct,
+                    orderId: orderId,
+                    createdAt: new Date().toISOString()
+                });
+
                 remainingCost -= deduct;
                 remainingCost = Math.max(0, parseFloat(remainingCost.toFixed(2))); // Avoid float errors
             }
@@ -2675,16 +2749,32 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
     }
 
     // 2. Treasury Deduction
-    if (remainingCost > 0) {
-        console.log(`[processCostDeduction] Deducting remaining ${remainingCost} from Treasury`);
-        await addTreasuryTransaction({
-            amount: -remainingCost,
-            type: 'withdrawal',
-            description: `Auto-deduction for Order #${invoiceNumber} (Rem: ${remainingCost})`,
-            relatedOrderId: orderId
-        });
+    // Use manual treasury amount if provided, otherwise use the remaining cost
+    const treasuryDeduction = manualTreasuryAmount !== undefined ? manualTreasuryAmount : remainingCost;
+
+    if (treasuryDeduction > 0) {
+        console.log(`[processCostDeduction] Deducting ${treasuryDeduction} from Treasury`);
+
+        // Fetch default USDT/Dollar card
+        const { data: treasuryCard } = await supabaseAdmin
+            .from(TREASURY_CARDS_COLLECTION)
+            .select('id')
+            .eq('type', 'cash_dollar')
+            .single();
+
+        if (treasuryCard) {
+            await addTreasuryTransaction({
+                amount: -treasuryDeduction,
+                type: 'withdrawal',
+                description: `Auto-deduction for Order #${invoiceNumber} (Amt: ${treasuryDeduction})`,
+                relatedOrderId: orderId,
+                cardId: treasuryCard.id
+            });
+        } else {
+            console.error("[processCostDeduction] Failed: No 'cash_dollar' treasury card found.");
+        }
     } else {
-        console.log(`[processCostDeduction] Cost fully covered by card.`);
+        console.log(`[processCostDeduction] No treasury deduction needed.`);
     }
 }
 
@@ -2906,8 +2996,8 @@ export async function reversePayment(
 
 export async function getUserWalletBalance(userId: string): Promise<number> {
     try {
-        const { data, error } = await supabase
-            .from(USERS_TABLE)
+        const { data, error } = await supabaseAdmin
+            .from(USERS_COLLECTION)
             .select('walletBalance')
             .eq('id', userId)
             .single();
@@ -2930,7 +3020,7 @@ export async function addWalletTransaction(
 ): Promise<boolean> {
     try {
         // 1. Add Transaction
-        const { error: txError } = await supabase
+        const { error: txError } = await supabaseAdmin
             .from('wallet_transactions_v4')
             .insert([{
                 userId,
@@ -2950,8 +3040,8 @@ export async function addWalletTransaction(
             ? currentBalance + amount
             : currentBalance - amount;
 
-        const { error: updateError } = await supabase
-            .from(USERS_TABLE)
+        const { error: updateError } = await supabaseAdmin
+            .from(USERS_COLLECTION)
             .update({ walletBalance: newBalance })
             .eq('id', userId);
 
@@ -2977,7 +3067,7 @@ export async function addWalletTransaction(
 
 export async function getWalletTransactions(userId: string): Promise<WalletTransaction[]> {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('wallet_transactions_v4')
             .select('*')
             .eq('userId', userId)
@@ -2993,7 +3083,7 @@ export async function getWalletTransactions(userId: string): Promise<WalletTrans
 
 export async function getAllWalletTransactions(): Promise<WalletTransaction[]> {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('wallet_transactions_v4')
             .select('*')
             .order('created_at', { ascending: false });

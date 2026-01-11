@@ -58,6 +58,7 @@ export interface Order {
   siteId?: string;
   productLinks: string;
   exchangeRate: number; // Exchange rate at the time of order creation (snapshot)
+  shippingExchangeRate?: number; // Specific rate for shipping calculations
   managerId?: string; // ID of the manager who created/edited the order
   // Optional detailed fields from form
   purchasePriceUSD?: number;
@@ -178,6 +179,7 @@ export interface Notification {
 
 export interface AppSettings {
   exchangeRate: number;
+  shippingExchangeRate?: number; // Added
   pricePerKiloLYD: number;
   pricePerKiloUSD: number;
   customerPricePerKiloUSD?: number;
@@ -186,6 +188,7 @@ export interface AppSettings {
 export interface SystemSettings {
   id: string; // Singleton ID usually
   exchangeRate: number;
+  shippingExchangeRate?: number; // Added
   shippingCostUSD: number; // Cost for the company (e.g. 4.5)
   shippingPriceUSD: number; // Price for the customer (e.g. 5.0)
 }
@@ -312,6 +315,18 @@ export interface TreasuryCard {
   updatedAt: string; // ISO
 }
 
+export interface SheinTransaction {
+  id: string;
+  cardId: string;
+  amount: number;
+  orderId: string;
+  createdAt: string; // ISO
+  // Joined Fields
+  orderNumber?: string;
+  customerName?: string;
+  customerPhone?: string;
+}
+
 export interface TreasuryTransaction {
   id: string;
   amount: number;
@@ -321,6 +336,10 @@ export interface TreasuryTransaction {
   description: string;
   relatedOrderId?: string;
   createdAt: string; // ISO
+  // Joined Fields (Optional)
+  orderNumber?: string;
+  customerName?: string;
+  customerPhone?: string;
 }
 
 export interface WalletTransaction {
