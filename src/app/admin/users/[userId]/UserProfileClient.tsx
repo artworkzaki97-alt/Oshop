@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Order, Transaction, User, OrderStatus, Deposit, WalletTransaction } from '@/lib/types';
+import { Order, Transaction, User, OrderStatus, Deposit, WalletTransaction, TreasuryCard } from '@/lib/types';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from '@/components/ui/use-toast';
-import { addWalletTransaction } from '@/lib/actions';
+import { addWalletTransaction, getTreasuryCards } from '@/lib/actions';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
     User as UserIcon,
     Phone,
@@ -92,8 +93,33 @@ export const UserProfileClient = ({
     const [walletAmount, setWalletAmount] = React.useState('');
     const [walletDescription, setWalletDescription] = React.useState('');
     const [paymentMethod, setPaymentMethod] = React.useState<'cash' | 'bank'>('cash');
+    const [selectedTreasuryCardId, setSelectedTreasuryCardId] = React.useState<string | undefined>(undefined);
+    const [treasuryCards, setTreasuryCards] = React.useState<TreasuryCard[]>([]);
     const [isSubmittingWallet, setIsSubmittingWallet] = React.useState(false);
     const { toast } = useToast();
+
+    React.useEffect(() => {
+        if (isWalletDialogOpen) {
+            getTreasuryCards().then(cards => {
+                setTreasuryCards(cards);
+                // Pre-select if only one matches type or default logic
+            });
+        }
+    }, [isWalletDialogOpen]);
+
+    // Filter relevant cards based on selected payment method
+    const relevantCards = treasuryCards.filter(c =>
+        paymentMethod === 'cash' ? c.type === 'cash_libyan' : c.type === 'bank'
+    );
+
+    // Auto-select first relevant card if none selected
+    React.useEffect(() => {
+        if (relevantCards.length > 0 && !selectedTreasuryCardId) {
+            setSelectedTreasuryCardId(relevantCards[0].id);
+        } else if (relevantCards.length > 0 && !relevantCards.find(c => c.id === selectedTreasuryCardId)) {
+            setSelectedTreasuryCardId(relevantCards[0].id);
+        }
+    }, [paymentMethod, treasuryCards, selectedTreasuryCardId]);
 
     const handleWalletAction = async () => {
         const amount = parseFloat(walletAmount);
@@ -103,16 +129,17 @@ export const UserProfileClient = ({
         }
 
         setIsSubmittingWallet(true);
-        const success = await addWalletTransaction(
+        const response = await addWalletTransaction(
             user.id,
             amount,
             walletActionType,
             walletDescription || (walletActionType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد'),
             undefined, // managerId
-            walletActionType === 'deposit' ? paymentMethod : undefined
+            walletActionType === 'deposit' ? paymentMethod : undefined,
+            walletActionType === 'deposit' ? selectedTreasuryCardId : undefined
         );
 
-        if (success) {
+        if (response.success) {
             toast({ title: "نجاح", description: "تمت العملية بنجاح" });
             setIsWalletDialogOpen(false);
             setWalletAmount('');
@@ -121,7 +148,7 @@ export const UserProfileClient = ({
             // Ideally, we should router.refresh() or passed callback.
             window.location.reload();
         } else {
-            toast({ title: "خطأ", description: "فشلت العملية", variant: "destructive" });
+            toast({ title: "فشلت العملية", description: response.error || "حدث خطأ غير معروف", variant: "destructive" });
         }
         setIsSubmittingWallet(false);
     };
@@ -560,6 +587,22 @@ export const UserProfileClient = ({
                                             <CreditCard className={`w-6 h-6 ${paymentMethod === 'bank' ? 'text-primary' : 'text-muted-foreground'}`} />
                                             <span className={`font-bold ${paymentMethod === 'bank' ? 'text-primary' : 'text-muted-foreground'}`}>مصرفي (Bank)</span>
                                         </div>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <Label>اختر الخزينة / الحساب</Label>
+                                        <Select value={selectedTreasuryCardId} onValueChange={setSelectedTreasuryCardId}>
+                                            <SelectTrigger className="w-full mt-2">
+                                                <SelectValue placeholder="اختر الحساب..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {relevantCards.map(card => (
+                                                    <SelectItem key={card.id} value={card.id}>
+                                                        {card.name} (رصيد: {card.balance.toLocaleString()} د.ل)
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
                             )}

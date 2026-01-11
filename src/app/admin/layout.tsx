@@ -100,6 +100,8 @@ const getPageTitle = (pathname: string): string => {
   if (pathname.startsWith('/admin/creditors/print')) return 'طباعة كشف حساب';
   if (pathname.startsWith('/admin/creditors/')) return 'ملف الذمة';
   if (pathname.startsWith('/admin/orders/')) return 'تفاصيل الطلب';
+  if (pathname.startsWith('/admin/treasury/')) return 'تفاصيل الخزينة';
+  if (pathname.startsWith('/admin/shein-cards/')) return 'تفاصيل بطاقة شي إن';
 
   return pageTitles[pathname] || 'لوحة التحكم';
 };
@@ -181,7 +183,17 @@ export default function AdminLayout({
     return <>{children}</>;
   }
 
-  if (pathname !== '/admin/dashboard' && !visibleNavItems.some(item => pathname.startsWith(item.href))) {
+  // Check access:
+  // 1. Dashboard is always allowed.
+  // 2. Path must start with a visible nav item's href.
+  // 3. SPECIAL CASE: /admin/treasury/... is allowed if user has access to /admin/shein-cards (inventory permission).
+  // 4. SPECIAL CASE: /admin/shein-cards/... (details) matches standard prefix so it's covered by #2.
+  const isAllowed =
+    pathname === '/admin/dashboard' ||
+    visibleNavItems.some(item => pathname.startsWith(item.href)) ||
+    (pathname.startsWith('/admin/treasury') && visibleNavItems.some(item => item.href === '/admin/shein-cards'));
+
+  if (!isAllowed) {
     return (
       <div className="flex h-screen items-center justify-center bg-[hsl(var(--background))] text-center p-4" dir="rtl">
         <div className="glass-card p-8 rounded-2xl border-red-500/20">

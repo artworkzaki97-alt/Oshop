@@ -661,9 +661,9 @@ export default function AdminOrdersPage() {
             <DialogDescription>
               هل أنت متأكد من رغبتك في حذف هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.
               {orderToDelete && (
-                <div className="mt-2 p-2 bg-red-50 rounded text-red-700 font-mono text-sm">
+                <span className="mt-2 p-2 bg-red-50 rounded text-red-700 font-mono text-sm block">
                   {orderToDelete.invoiceNumber} - {orderToDelete.customerName}
-                </div>
+                </span>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -830,7 +830,7 @@ function QuickEditDialog({ open, onOpenChange, order, onSave }: {
               id="quick-price"
               type="number"
               value={purchasePriceUSD}
-              onChange={(e) => setPurchasePriceUSD(parseFloat(e.target.value) || 0)}
+              onChange={(e) => setPurchasePriceUSD(e.target.value === '' ? 0 : parseFloat(e.target.value))}
               className="col-span-3 text-left"
               dir="ltr"
             />

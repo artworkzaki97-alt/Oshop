@@ -315,7 +315,7 @@ export default function InventoryPage() {
                                 type="number"
                                 step="0.01"
                                 value={formData.costPriceUSD}
-                                onChange={(e) => setFormData({ ...formData, costPriceUSD: parseFloat(e.target.value) || 0 })}
+                                onChange={(e) => setFormData({ ...formData, costPriceUSD: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                             />
                         </div>
                         <div className="space-y-2">
@@ -324,7 +324,7 @@ export default function InventoryPage() {
                                 type="number"
                                 step="0.01"
                                 value={formData.sellingPriceLYD}
-                                onChange={(e) => setFormData({ ...formData, sellingPriceLYD: parseFloat(e.target.value) || 0 })}
+                                onChange={(e) => setFormData({ ...formData, sellingPriceLYD: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                             />
                         </div>
                         <div className="space-y-2">
@@ -333,7 +333,7 @@ export default function InventoryPage() {
                                 type="number"
                                 step="0.01"
                                 value={formData.sellingPriceUSD}
-                                onChange={(e) => setFormData({ ...formData, sellingPriceUSD: parseFloat(e.target.value) || 0 })}
+                                onChange={(e) => setFormData({ ...formData, sellingPriceUSD: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
                             />
                         </div>
                         <div className="space-y-2">

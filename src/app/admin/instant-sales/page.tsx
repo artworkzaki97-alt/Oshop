@@ -35,9 +35,9 @@ const InstantSalesCalculator = () => {
     const [productName, setProductName] = useState<string>('');
     const [costUSD, setCostUSD] = useState<number>(0);
     const [costExchangeRate, setCostExchangeRate] = useState<number>(0);
-    
+
     const [salePriceMode, setSalePriceMode] = useState<'LYD' | 'USD'>('LYD');
-    
+
     const [salePriceLYD, setSalePriceLYD] = useState<number>(0);
     const [salePriceUSD, setSalePriceUSD] = useState<number>(0);
     const [saleExchangeRate, setSaleExchangeRate] = useState<number>(0);
@@ -55,7 +55,7 @@ const InstantSalesCalculator = () => {
     }, []);
 
     const totalCostLYD = useMemo(() => costUSD * costExchangeRate, [costUSD, costExchangeRate]);
-    
+
     const finalSalePriceLYD = useMemo(() => {
         if (salePriceMode === 'LYD') {
             return salePriceLYD;
@@ -113,13 +113,13 @@ const InstantSalesCalculator = () => {
             setIsSaving(false);
         }
     };
-    
+
     return (
         <div className="p-4 sm:p-6" dir="rtl">
             <div className="max-w-3xl mx-auto space-y-6">
                 <div className="flex justify-between items-center">
-                     <div className="text-center">
-                         <h1 className="text-3xl font-bold flex items-center justify-center gap-2">
+                    <div className="text-center">
+                        <h1 className="text-3xl font-bold flex items-center justify-center gap-2">
                             <Zap className="text-primary" />
                             حاسبة المبيعات الفورية
                         </h1>
@@ -127,20 +127,20 @@ const InstantSalesCalculator = () => {
                             أداة سريعة لحساب تكلفة وربح المنتجات بأسعار صرف مخصصة.
                         </p>
                     </div>
-                     <Button variant="outline" className="gap-2" onClick={() => router.push('/admin/instant-sales/history')}>
+                    <Button variant="outline" className="gap-2" onClick={() => router.push('/admin/instant-sales/history')}>
                         <BookOpen className="h-4 w-4" />
                         الانتقال إلى السجل
                     </Button>
                 </div>
-                
+
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Type size={20}/> اسم المنتج</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><Type size={20} /> اسم المنتج</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-2">
                             <Label htmlFor="productName">اسم المنتج (اختياري)</Label>
-                            <Input 
+                            <Input
                                 id="productName"
                                 type="text"
                                 placeholder="مثال: حذاء رياضي مقاس 42"
@@ -158,24 +158,24 @@ const InstantSalesCalculator = () => {
                     <CardContent className="grid sm:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <Label htmlFor="costUSD">تكلفة المنتج (بالدولار)</Label>
-                            <Input 
+                            <Input
                                 id="costUSD"
                                 type="number"
                                 dir="ltr"
                                 placeholder="0.00"
                                 value={costUSD || ''}
-                                onChange={(e) => setCostUSD(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => setCostUSD(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                             />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="costExchangeRate">سعر صرف التكلفة (للدولار الواحد)</Label>
-                            <Input 
+                            <Input
                                 id="costExchangeRate"
                                 type="number"
                                 dir="ltr"
                                 placeholder="0.00"
                                 value={costExchangeRate || ''}
-                                onChange={(e) => setCostExchangeRate(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => setCostExchangeRate(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                             />
                         </div>
                     </CardContent>
@@ -200,37 +200,37 @@ const InstantSalesCalculator = () => {
                         {salePriceMode === 'LYD' ? (
                             <div className="space-y-2 pt-2 animate-in fade-in">
                                 <Label htmlFor="salePriceLYD">سعر البيع النهائي (بالدينار)</Label>
-                                <Input 
+                                <Input
                                     id="salePriceLYD"
                                     type="number"
                                     dir="ltr"
                                     placeholder="0.00"
                                     value={salePriceLYD || ''}
-                                    onChange={(e) => setSalePriceLYD(parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => setSalePriceLYD(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                 />
                             </div>
                         ) : (
                             <div className="grid sm:grid-cols-2 gap-6 pt-2 animate-in fade-in">
-                                 <div className="space-y-2">
+                                <div className="space-y-2">
                                     <Label htmlFor="salePriceUSD">سعر البيع (بالدولار)</Label>
-                                    <Input 
+                                    <Input
                                         id="salePriceUSD"
                                         type="number"
                                         dir="ltr"
                                         placeholder="0.00"
                                         value={salePriceUSD || ''}
-                                        onChange={(e) => setSalePriceUSD(parseFloat(e.target.value) || 0)}
+                                        onChange={(e) => setSalePriceUSD(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="saleExchangeRate">سعر صرف البيع (للدولار الواحد)</Label>
-                                    <Input 
+                                    <Input
                                         id="saleExchangeRate"
                                         type="number"
                                         dir="ltr"
                                         placeholder="0.00"
                                         value={saleExchangeRate || ''}
-                                        onChange={(e) => setSaleExchangeRate(parseFloat(e.target.value) || 0)}
+                                        onChange={(e) => setSaleExchangeRate(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     />
                                 </div>
                             </div>
@@ -239,25 +239,25 @@ const InstantSalesCalculator = () => {
                 </Card>
 
                 <Card className="bg-primary/5 border-primary/20">
-                     <CardHeader className="flex-row justify-between items-center">
+                    <CardHeader className="flex-row justify-between items-center">
                         <CardTitle className="text-primary">النتائج {productName && `- ${productName}`}</CardTitle>
                         <div className="flex items-center gap-2">
                             <Button variant="ghost" size="sm" className="gap-1.5" onClick={handleReset}>
-                                <RefreshCw className="w-4 h-4"/>
+                                <RefreshCw className="w-4 h-4" />
                                 إعادة تعيين
                             </Button>
-                             <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={isSaving}>
-                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+                            <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={isSaving}>
+                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                 حفظ في السجل
                             </Button>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <SummaryRow label="إجمالي التكلفة" value={`${totalCostLYD.toFixed(2)} د.ل`} icon={<TrendingDown className="text-destructive"/>} className="text-destructive" />
-                        <Separator/>
-                        <SummaryRow label="إجمالي سعر البيع" value={`${finalSalePriceLYD.toFixed(2)} د.ل`} icon={<TrendingUp className="text-green-600"/>} className="text-green-600" />
-                        <Separator/>
-                        <SummaryRow label="صافي الربح" value={`${netProfit.toFixed(2)} د.ل`} icon={<DollarSign className="text-primary"/>} className="text-primary text-2xl" />
+                        <SummaryRow label="إجمالي التكلفة" value={`${totalCostLYD.toFixed(2)} د.ل`} icon={<TrendingDown className="text-destructive" />} className="text-destructive" />
+                        <Separator />
+                        <SummaryRow label="إجمالي سعر البيع" value={`${finalSalePriceLYD.toFixed(2)} د.ل`} icon={<TrendingUp className="text-green-600" />} className="text-green-600" />
+                        <Separator />
+                        <SummaryRow label="صافي الربح" value={`${netProfit.toFixed(2)} د.ل`} icon={<DollarSign className="text-primary" />} className="text-primary text-2xl" />
                     </CardContent>
                 </Card>
             </div>

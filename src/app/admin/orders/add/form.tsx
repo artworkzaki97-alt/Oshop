@@ -589,19 +589,19 @@ const AddOrderForm = () => {
                 <FormSection title="تفاصيل العملية والأسعار">
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <FormField label="سعر الشراء (بالدولار)" id="purchase-price-usd">
-                            <Input type="number" id="purchase-price-usd" value={purchasePriceUSD} onChange={e => setPurchasePriceUSD(parseFloat(e.target.value) || 0)} dir="ltr" />
+                            <Input type="number" id="purchase-price-usd" value={purchasePriceUSD || ''} onChange={e => setPurchasePriceUSD(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
                         <FormField label="سعر صرف التكلفة" id="cost-exchange-rate">
-                            <Input type="number" id="cost-exchange-rate" value={costExchangeRate} onChange={e => setCostExchangeRate(parseFloat(e.target.value) || 0)} dir="ltr" />
+                            <Input type="number" id="cost-exchange-rate" value={costExchangeRate || ''} onChange={e => setCostExchangeRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
                         <FormField label="سعر صرف الشحن" id="shipping-exchange-rate">
-                            <Input type="number" id="shipping-exchange-rate" value={shippingExchangeRate} onChange={e => setShippingExchangeRate(parseFloat(e.target.value) || 0)} dir="ltr" />
+                            <Input type="number" id="shipping-exchange-rate" value={shippingExchangeRate || ''} onChange={e => setShippingExchangeRate(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
                         <FormField label="سعر البيع الأساسي (دينار)" id="selling-price-lyd">
-                            <Input type="number" id="selling-price-lyd" value={sellingPriceLYD} onChange={e => setSellingPriceLYD(parseFloat(e.target.value) || 0)} dir="ltr" />
+                            <Input type="number" id="selling-price-lyd" value={sellingPriceLYD || ''} onChange={e => setSellingPriceLYD(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
                         <FormField label="المقدم (دينار)" id="down-payment-lyd">
-                            <Input type="number" id="down-payment-lyd" value={downPaymentLYD} onChange={e => setDownPaymentLYD(parseFloat(e.target.value) || 0)} dir="ltr" />
+                            <Input type="number" id="down-payment-lyd" value={downPaymentLYD || ''} onChange={e => setDownPaymentLYD(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4 pt-4 items-start">
@@ -610,8 +610,8 @@ const AddOrderForm = () => {
                             <div className="flex gap-2">
                                 <Input
                                     type="number"
-                                    value={addedCost}
-                                    onChange={e => setAddedCost(parseFloat(e.target.value) || 0)}
+                                    value={addedCost || ''}
+                                    onChange={e => setAddedCost(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     dir="ltr"
                                     className="w-full"
                                 />
@@ -917,15 +917,15 @@ const AddOrderForm = () => {
                             <Input value={itemDescription} onChange={e => setItemDescription(e.target.value)} id="item-description" placeholder="وصف مختصر للشحنة" />
                         </FormField>
                         <FormField label="الوزن (كغ)" id="weight-kg" icon={<Weight className="w-4 h-4 text-muted-foreground" />}>
-                            <Input type="number" id="weight-kg" value={weightKG} onChange={e => setWeightKG(parseFloat(e.target.value) || 0)} dir="ltr" />
+                            <Input type="number" id="weight-kg" value={weightKG || ''} onChange={e => setWeightKG(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
                         <div className="space-y-2">
                             <Label>سعر الكيلو (للشركة)</Label>
                             <div className="flex gap-2">
                                 <Input
                                     type="number"
-                                    value={pricePerKilo}
-                                    onChange={e => setPricePerKilo(parseFloat(e.target.value) || 0)}
+                                    value={pricePerKilo || ''}
+                                    onChange={e => setPricePerKilo(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     dir="ltr"
                                     className="w-full"
                                 />
@@ -946,8 +946,8 @@ const AddOrderForm = () => {
                             <div className="flex gap-2">
                                 <Input
                                     type="number"
-                                    value={customerWeightCost}
-                                    onChange={e => setCustomerWeightCost(parseFloat(e.target.value) || 0)}
+                                    value={customerWeightCost || ''}
+                                    onChange={e => setCustomerWeightCost(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     dir="ltr"
                                     className="w-full"
                                 />

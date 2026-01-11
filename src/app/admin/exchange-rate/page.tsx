@@ -28,7 +28,7 @@ const ExchangeRatePage = () => {
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target;
-        setSettings(prev => ({ ...prev, [id]: parseFloat(value) || 0 }));
+        setSettings(prev => ({ ...prev, [id]: value === '' ? undefined : parseFloat(value) }));
     }
 
     const handleSave = async () => {

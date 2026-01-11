@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, FileText, Eye, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { SheinCard, TreasuryCard, TreasuryTransaction, SheinTransaction } from '@/lib/types';
 import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, getTreasuryCards, getSheinCardTransactions } from '@/lib/actions';
@@ -15,7 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+import { useRouter } from 'next/navigation';
+
 export default function SheinCardsPage() {
+    const router = useRouter();
     const { toast } = useToast();
     const [cards, setCards] = useState<SheinCard[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -206,19 +209,49 @@ export default function SheinCardsPage() {
                                     {card.balance.toFixed(2)} {card.currency === 'LYD' ? 'د.ل' : '$'}
                                 </div>
                                 <p className="text-xs text-blue-600/80 dark:text-blue-400 mb-4">الرصيد الحالي</p>
-                                <Button
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                    size="sm"
-                                    onClick={() => {
-                                        setSelectedTreasuryCard(card);
-                                        setManageTab('actions');
-                                        setIsManageDialogOpen(true);
-                                        setManageAmount('');
-                                        setManageNote('');
-                                    }}
-                                >
-                                    إدارة / سجل
-                                </Button>
+                                <div className="flex flex-col gap-2 mt-4">
+                                    <div className="flex gap-2">
+                                        <Button
+                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                            size="sm"
+                                            onClick={() => {
+                                                setSelectedTreasuryCard(card);
+                                                setManageTab('actions');
+                                                setManageType('deposit');
+                                                setIsManageDialogOpen(true);
+                                                setManageAmount('');
+                                                setManageNote('');
+                                            }}
+                                        >
+                                            <TrendingUp className="w-3 h-3 ml-1" />
+                                            إيداع
+                                        </Button>
+                                        <Button
+                                            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                                            size="sm"
+                                            onClick={() => {
+                                                setSelectedTreasuryCard(card);
+                                                setManageTab('actions');
+                                                setManageType('withdrawal');
+                                                setIsManageDialogOpen(true);
+                                                setManageAmount('');
+                                                setManageNote('');
+                                            }}
+                                        >
+                                            <TrendingDown className="w-3 h-3 ml-1" />
+                                            سحب
+                                        </Button>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        size="sm"
+                                        onClick={() => router.push(`/admin/treasury/${card.id}`)}
+                                    >
+                                        <Eye className="w-3 h-3 ml-2" />
+                                        عرض التفاصيل والسجل
+                                    </Button>
+                                </div>
                             </CardContent>
                         </Card>
                     ))}
@@ -303,16 +336,8 @@ export default function SheinCardsPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex justify-center gap-2">
-                                                    <Button variant="ghost" size="icon" onClick={async () => {
-                                                        setViewHistoryCard(card);
-                                                        setSheinHistoryLoading(true);
-                                                        try {
-                                                            const data = await getSheinCardTransactions(card.id);
-                                                            setSheinHistory(data);
-                                                        } catch (e) { console.error(e); }
-                                                        setSheinHistoryLoading(false);
-                                                    }} title="سجل المعاملات">
-                                                        <FileText className="w-4 h-4 text-blue-600" />
+                                                    <Button variant="ghost" size="icon" onClick={() => router.push(`/admin/shein-cards/${card.id}`)} title="عرض التفاصيل والسجل">
+                                                        <Eye className="w-4 h-4 text-primary" />
                                                     </Button>
                                                     <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(card)}>
                                                         <Pencil className="w-4 h-4" />

@@ -381,13 +381,13 @@ const AddTemporaryBatchForm = () => {
                                 <h3 className='font-semibold'>2. تفاصيل العملية</h3>
                                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <FormField label="سعر الشراء (بالدولار)" id={`purchase-price-${order.subOrderId}`}>
-                                        <Input type="number" value={order.purchasePriceUSD} onChange={e => handleSubOrderChange(order.subOrderId, 'purchasePriceUSD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent" />
+                                        <Input type="number" value={order.purchasePriceUSD} onChange={e => handleSubOrderChange(order.subOrderId, 'purchasePriceUSD', e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="سعر البيع (دينار)" id={`selling-price-${order.subOrderId}`}>
-                                        <Input type="number" value={order.sellingPriceLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'sellingPriceLYD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent" />
+                                        <Input type="number" value={order.sellingPriceLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'sellingPriceLYD', e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="المقدم (دينار)" id={`down-payment-${order.subOrderId}`}>
-                                        <Input type="number" value={order.downPaymentLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'downPaymentLYD', parseFloat(e.target.value) || 0)} dir="ltr" className="bg-transparent" />
+                                        <Input type="number" value={order.downPaymentLYD} onChange={e => handleSubOrderChange(order.subOrderId, 'downPaymentLYD', e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" className="bg-transparent" />
                                     </FormField>
                                     <FormField label="الباقي (دينار)" id={`remaining-${order.subOrderId}`}>
                                         <Input value={calculatedTotals[index].remainingAmount.toFixed(2)} readOnly className="bg-muted/50 font-bold" dir="ltr" />

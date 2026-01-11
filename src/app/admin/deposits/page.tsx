@@ -180,7 +180,7 @@ const AdminDepositsPage = () => {
         const depositData: Partial<Deposit> = {
             customerName: formData.get('customerName') as string,
             customerPhone: formData.get('customerPhone') as string,
-            amount: parseFloat(formData.get('amount') as string) || 0,
+            amount: (formData.get('amount') as string) === '' ? 0 : parseFloat(formData.get('amount') as string),
             description: formData.get('description') as string,
             representativeId: repId,
             representativeName: selectedRep?.name || null,

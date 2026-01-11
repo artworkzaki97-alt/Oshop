@@ -427,7 +427,7 @@ const AdminTemporaryUsersPage = () => {
                                     id="payment-amount"
                                     type="number"
                                     value={paymentAmount}
-                                    onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => setPaymentAmount(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     dir="ltr"
                                     placeholder='0.00'
                                     disabled={!selectedSubOrderId}
