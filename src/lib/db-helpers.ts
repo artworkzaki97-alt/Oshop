@@ -79,6 +79,8 @@ export async function fetchPaginated<T>(
 
 /**
  * دالة مساعدة للـ atomic increment
+ * ملاحظة: هذه ليست ذرية 100% في التطبيق، ولكنها تفي بالغرض حالياً.
+ * للأداء العالي والتزامن الدقيق يفضل استخدام RPC.
  */
 export async function atomicIncrement(
     tableName: string,
@@ -86,13 +88,28 @@ export async function atomicIncrement(
     field: string,
     amount: number
 ): Promise<void> {
-    const { error } = await supabaseAdmin
+    // 1. Get current value
+    const { data: currentRecord, error: fetchError } = await supabaseAdmin
         .from(tableName)
-        .update({ [field]: supabaseAdmin.sql`${field} + ${amount}` })
+        .select(field)
+        .eq('id', id)
+        .single();
+
+    if (fetchError) {
+        throw new Error(`Failed to fetch current value for ${field}: ${fetchError.message}`);
+    }
+
+    const currentValue = (currentRecord as any)[field] || 0;
+    const newValue = currentValue + amount;
+
+    // 2. Update with new value
+    const { error: updateError } = await supabaseAdmin
+        .from(tableName)
+        .update({ [field]: newValue })
         .eq('id', id);
 
-    if (error) {
-        throw new Error(`Failed to increment ${field}: ${error.message}`);
+    if (updateError) {
+        throw new Error(`Failed to increment ${field}: ${updateError.message}`);
     }
 }
 
