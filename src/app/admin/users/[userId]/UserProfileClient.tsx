@@ -121,6 +121,56 @@ export const UserProfileClient = ({
         }
     }, [paymentMethod, treasuryCards, selectedTreasuryCardId]);
 
+    // دالة طباعة الإيصال - قابلة لإعادة الاستخدام
+    const printWalletReceipt = (transaction: {
+        id: string;
+        type: 'deposit' | 'withdrawal';
+        amount: number;
+        description: string;
+        createdAt: string;
+        paymentMethod?: 'cash' | 'bank' | 'other';
+    }) => {
+        const printWindow = window.open('', '', 'width=600,height=600');
+        if (printWindow) {
+            printWindow.document.write(`
+                <html dir="rtl">
+                    <head>
+                        <title>إيصال مالي - ${transaction.id.slice(0, 8)}</title>
+                        <style>
+                            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; text-align: center; border: 1px solid #ccc; max-width: 500px; margin: 20px auto; }
+                            .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+                            .amount { font-size: 32px; font-weight: bold; color: ${transaction.type === 'deposit' ? '#10b981' : '#ef4444'}; margin: 20px 0; }
+                            .details { text-align: right; margin: 20px 0; line-height: 1.8; }
+                            .footer { margin-top: 40px; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px; }
+                            @media print { body { border: none; margin: 0; } }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2>إيصال ${transaction.type === 'deposit' ? 'إيداع' : 'سحب'} مالي</h2>
+                            <p>${new Date().toLocaleString('ar-LY')}</p>
+                        </div>
+                        <div class="amount">${transaction.amount.toFixed(2)} د.ل</div>
+                        <div class="details">
+                            <strong>اسم العميل:</strong> ${user.name}<br>
+                            <strong>التاريخ:</strong> ${new Date(transaction.createdAt).toLocaleString('ar-LY')}<br>
+                            <strong>النوع:</strong> ${transaction.type === 'deposit' ? 'إيداع في المحفظة' : 'سحب من المحفظة'}<br>
+                            <strong>الوصف:</strong> ${transaction.description}<br>
+                            ${transaction.paymentMethod ? `<strong>طريقة الدفع:</strong> ${transaction.paymentMethod === 'cash' ? 'نقدي' : 'مصرفي'}<br>` : ''}
+                            <strong>رقم العملية:</strong> ${transaction.id}
+                        </div>
+                        <div class="footer">
+                            <p>Huwiyya Shipping - Oshop</p>
+                            <p>تم استخراج هذا الإيصال إلكترونياً</p>
+                        </div>
+                        <script>window.print();</script>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+    };
+
     const handleWalletAction = async () => {
         const amount = parseFloat(walletAmount);
         if (!amount || amount <= 0) {
@@ -141,12 +191,26 @@ export const UserProfileClient = ({
 
         if (response.success) {
             toast({ title: "نجاح", description: "تمت العملية بنجاح" });
+
+            // طباعة الإيصال تلقائياً
+            printWalletReceipt({
+                id: `WTX-${Date.now()}`, // معرف مؤقت للعملية الجديدة
+                type: walletActionType,
+                amount: amount,
+                description: walletDescription || (walletActionType === 'deposit' ? 'إيداع رصيد' : 'سحب رصيد'),
+                createdAt: new Date().toISOString(),
+                paymentMethod: walletActionType === 'deposit' ? paymentMethod : undefined
+            });
+
+            // إغلاق النافذة وإعادة تعيين القيم
             setIsWalletDialogOpen(false);
             setWalletAmount('');
             setWalletDescription('');
-            // Optional: Trigger a refresh or update local state if needed. 
-            // Ideally, we should router.refresh() or passed callback.
-            window.location.reload();
+
+            // إعادة تحميل الصفحة بعد وقت قصير للسماح بالطباعة
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
         } else {
             toast({ title: "فشلت العملية", description: response.error || "حدث خطأ غير معروف", variant: "destructive" });
         }
@@ -322,83 +386,84 @@ export const UserProfileClient = ({
                                 </h3>
                             </div>
 
-                            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                                {walletTransactions && walletTransactions.length > 0 ? (
-                                    walletTransactions.map((tx) => (
-                                        <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl bg-black/5 dark:bg-white/5 mb-3 border border-transparent hover:border-primary/10">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`p-2 rounded-full ${tx.type === 'deposit' ? 'bg-emerald-100/50 text-emerald-600' : 'bg-red-100/50 text-red-600'}`}>
-                                                    {tx.type === 'deposit' ? <ArrowUpCircle className="w-5 h-5" /> : <ArrowDownCircle className="w-5 h-5" />}
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold">{tx.type === 'deposit' ? 'إيداع' : 'سحب'}</p>
-                                                    <p className="text-xs text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('ar-LY', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-left">
-                                                <p className={`font-bold ${tx.type === 'deposit' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                    {tx.type === 'deposit' ? '+' : '-'}{tx.amount.toFixed(2)} د.ل
-                                                </p>
-                                                <div className="flex items-center justify-end gap-2 mt-1">
-                                                    <p className="text-xs text-muted-foreground truncate max-w-[150px]">{tx.description}</p>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6"
-                                                        title="طباعة إيصال"
-                                                        onClick={() => {
-                                                            const printWindow = window.open('', '', 'width=600,height=600');
-                                                            if (printWindow) {
-                                                                printWindow.document.write(`
-                                                                    <html dir="rtl">
-                                                                        <head>
-                                                                            <title>إيصال مالي - ${tx.id.slice(0, 8)}</title>
-                                                                            <style>
-                                                                                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; text-align: center; border: 1px solid #ccc; max-width: 500px; margin: 20px auto; }
-                                                                                .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-                                                                                .amount { font-size: 32px; font-weight: bold; color: ${tx.type === 'deposit' ? '#10b981' : '#ef4444'}; margin: 20px 0; }
-                                                                                .details { text-align: right; margin: 20px 0; line-height: 1.8; }
-                                                                                .footer { margin-top: 40px; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px; }
-                                                                                @media print { body { border: none; margin: 0; } }
-                                                                            </style>
-                                                                        </head>
-                                                                        <body>
-                                                                            <div class="header">
-                                                                                <h2>إيصال ${tx.type === 'deposit' ? 'إيداع' : 'سحب'} مالي</h2>
-                                                                                <p>${new Date().toLocaleString('ar-LY')}</p>
-                                                                            </div>
-                                                                            <div class="amount">${tx.amount.toFixed(2)} د.ل</div>
-                                                                            <div class="details">
-                                                                                <strong>اسم العميل:</strong> ${user.name}<br>
-                                                                                <strong>التاريخ:</strong> ${new Date(tx.createdAt).toLocaleString('ar-LY')}<br>
-                                                                                <strong>النوع:</strong> ${tx.type === 'deposit' ? 'إيداع في المحفظة' : 'سحب من المحفظة'}<br>
-                                                                                <strong>الوصف:</strong> ${tx.description}<br>
-                                                                                ${tx.paymentMethod ? `<strong>طريقة الدفع:</strong> ${tx.paymentMethod === 'cash' ? 'نقدي' : 'مصرفي'}<br>` : ''}
-                                                                                <strong>رقم العملية:</strong> ${tx.id}
-                                                                            </div>
-                                                                            <div class="footer">
-                                                                                <p>Huwiyya Shipping - Oshop</p>
-                                                                                <p>تم استخراج هذا الإيصال إلكترونياً</p>
-                                                                            </div>
-                                                                            <script>window.print();</script>
-                                                                        </body>
-                                                                    </html>
-                                                                `);
-                                                                printWindow.document.close();
-                                                            }
-                                                        }}
-                                                    >
-                                                        <Printer className="w-3 h-3" />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-10">
-                                        <p className="text-muted-foreground">لا توجد حركات في المحفظة</p>
-                                    </div>
-                                )}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-right">
+                                    <thead className="bg-black/5 dark:bg-white/5 text-muted-foreground font-medium">
+                                        <tr>
+                                            <th className="p-3 rounded-tr-lg">التاريخ</th>
+                                            <th className="p-3">البيان</th>
+                                            <th className="p-3 text-center">دائن (+)</th>
+                                            <th className="p-3 text-center">مدين (-)</th>
+                                            <th className="p-3 text-left rounded-tl-lg">الرصيد</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                                        {walletTransactions && walletTransactions.length > 0 ? (
+                                            (() => {
+                                                // Calculate running balance
+                                                // Assuming transactions are ordered DESC (newest first), we need to reverse to calculate running balance correctly then reverse back, OR calculating backwards from current balance.
+                                                // Let's assume standard DESC order from DB.
+                                                // Simplest logic: Start from current balance and work backwards? Or fetch old balance?
+
+                                                // Let's try to sort ASC first to calculate running balance, then display DESC.
+                                                const sortedTx = [...walletTransactions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+                                                let balance = 0;
+                                                const txWithBalance = sortedTx.map(tx => {
+                                                    if (tx.type === 'deposit') {
+                                                        balance += tx.amount;
+                                                    } else {
+                                                        balance -= tx.amount;
+                                                    }
+                                                    return { ...tx, currentBalance: balance };
+                                                });
+
+                                                // Now reverse to show newest first
+                                                return txWithBalance.reverse().map((tx) => (
+                                                    <tr key={tx.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                                        <td className="p-3 whitespace-nowrap">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold">{new Date(tx.createdAt).toLocaleDateString('ar-LY')}</span>
+                                                                <span className="text-[10px] text-muted-foreground">{new Date(tx.createdAt).toLocaleTimeString('ar-LY', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 max-w-[200px]">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-medium truncate" title={tx.description}>{tx.description}</span>
+                                                                <span className="text-[10px] text-muted-foreground font-mono">{tx.id.slice(0, 8)}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 text-center">
+                                                            {tx.type === 'deposit' ? (
+                                                                <span className="font-bold text-emerald-600 bg-emerald-100/50 px-2 py-1 rounded-md inline-block min-w-[80px]">
+                                                                    {tx.amount.toLocaleString()} د.ل
+                                                                </span>
+                                                            ) : '-'}
+                                                        </td>
+                                                        <td className="p-3 text-center">
+                                                            {tx.type === 'withdrawal' ? (
+                                                                <span className="font-bold text-red-600 bg-red-100/50 px-2 py-1 rounded-md inline-block min-w-[80px]">
+                                                                    {tx.amount.toLocaleString()} د.ل
+                                                                </span>
+                                                            ) : '-'}
+                                                        </td>
+                                                        <td className="p-3 text-left font-mono font-bold" dir="ltr">
+                                                            <span className={tx.currentBalance < 0 ? 'text-red-500' : 'text-foreground'}>
+                                                                {tx.currentBalance.toLocaleString()} LYD
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()
+                                        ) : (
+                                            <tr>
+                                                <td colSpan={5} className="text-center py-10 text-muted-foreground">
+                                                    لا توجد حركات في المحفظة
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </GlassCard>
                     </TabsContent>

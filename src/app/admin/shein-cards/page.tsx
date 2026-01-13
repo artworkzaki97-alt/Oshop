@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2, CreditCard, Loader2, Search, DollarSign, FileText, Eye, TrendingUp, TrendingDown } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { SheinCard, TreasuryCard, TreasuryTransaction, SheinTransaction } from '@/lib/types';
-import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryBalance, getTreasuryCards, getSheinCardTransactions } from '@/lib/actions';
+import { getSheinCards, addSheinCard, updateSheinCard, deleteSheinCard, getTreasuryCards, getSheinCardTransactions } from '@/lib/actions';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
@@ -27,7 +27,6 @@ export default function SheinCardsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
     // Treasury Management State
-    const [treasuryBalance, setTreasuryBalance] = useState(0);
     const [treasuryCards, setTreasuryCards] = useState<TreasuryCard[]>([]);
     const [selectedTreasuryCard, setSelectedTreasuryCard] = useState<TreasuryCard | null>(null);
     const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
@@ -58,13 +57,11 @@ export default function SheinCardsPage() {
 
     const fetchCards = async () => {
         setIsLoading(true);
-        const [data, balance, tCards] = await Promise.all([
+        const [data, tCards] = await Promise.all([
             getSheinCards(),
-            getTreasuryBalance(),
             getTreasuryCards()
         ]);
         setCards(data);
-        setTreasuryBalance(balance);
         setTreasuryCards(tCards);
         setIsLoading(false);
     };
@@ -370,8 +367,8 @@ export default function SheinCardsPage() {
                                 <div key={card.id} className="bg-[#1c1c1e] rounded-3xl border border-white/5 p-5 shadow-lg relative overflow-hidden group">
                                     {/* Status Indicator Strip */}
                                     <div className={`absolute top-0 right-0 w-1.5 h-full ${card.status === 'available' ? 'bg-green-500 shadow-[0_0_15px_#22c55e]' :
-                                            card.status === 'used' ? 'bg-blue-500 shadow-[0_0_15px_#3b82f6]' :
-                                                'bg-red-500 shadow-[0_0_15px_#ef4444]'
+                                        card.status === 'used' ? 'bg-blue-500 shadow-[0_0_15px_#3b82f6]' :
+                                            'bg-red-500 shadow-[0_0_15px_#ef4444]'
                                         }`} />
 
                                     <div className="pl-2">
@@ -512,10 +509,18 @@ export default function SheinCardsPage() {
                                 if (selectedTreasuryCard) {
                                     setHistoryLoading(true);
                                     try {
-                                        const { getTreasuryTransactions } = await import('@/lib/actions');
-                                        const data = await getTreasuryTransactions(selectedTreasuryCard.id);
-                                        setHistory(data);
-                                    } catch (e) { console.error(e); }
+                                        const actionsModule = await import('@/lib/actions');
+                                        if (actionsModule.getTreasuryTransactions) {
+                                            const data = await actionsModule.getTreasuryTransactions(selectedTreasuryCard.id);
+                                            setHistory(data);
+                                        } else {
+                                            console.warn('getTreasuryTransactions is not available');
+                                            setHistory([]);
+                                        }
+                                    } catch (e) {
+                                        console.error('Error loading treasury transactions:', e);
+                                        setHistory([]);
+                                    }
                                     setHistoryLoading(false);
                                 }
                             }}

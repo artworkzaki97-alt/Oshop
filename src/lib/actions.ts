@@ -140,17 +140,25 @@ export async function recalculateUserStats(userId: string): Promise<void> {
 
         // 1. Calculate debt from regular orders
         const activeStatuses: OrderStatus[] = ['pending', 'processed', 'ready', 'shipped', 'arrived_dubai', 'arrived_benghazi', 'arrived_tobruk', 'out_for_delivery', 'delivered', 'paid'];
-        const userOrdersQuery = query(
-            collection(db, ORDERS_COLLECTION),
-            where("userId", "==", userId),
-            where("status", "in", activeStatuses)
-        );
-        const orderQuerySnapshot = await getDocs(userOrdersQuery);
-        orderCount += orderQuerySnapshot.size;
-        orderQuerySnapshot.forEach(doc => {
-            totalDebt += (doc.data() as Order).remainingAmount || 0;
+
+        // ✅ استخدام Supabase مع استبعاد المحذوفات
+        const { data: activeOrders, error: ordersError } = await supabaseAdmin
+            .from(ORDERS_COLLECTION)
+            .select('remainingAmount')
+            .eq('userId', userId)
+            .in('status', activeStatuses)
+            .is('deleted_at', null); // ✅ استبعاد الطلبات المحذوفة
+
+        if (ordersError) {
+            console.error('Error fetching orders:', ordersError);
+            throw ordersError;
+        }
+
+        orderCount = activeOrders?.length || 0;
+        activeOrders?.forEach(order => {
+            totalDebt += order.remainingAmount || 0;
         });
-        console.log(`Debt from regular orders for ${userId}: ${totalDebt}`);
+        console.log(`Debt from regular orders for ${userId}: ${totalDebt} (${orderCount} orders)`);
 
         // 2. Find all TempOrders assigned DIRECTLY to the user and add their debt,
         // ONLY if they haven't been converted to a main order (to avoid double counting).
@@ -827,12 +835,12 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
         const finalOrderData = {
             ...orderData,
             invoiceNumber,
-            invoiceNumber,
             exchangeRate: orderData.exchangeRate || settings.exchangeRate || 1,
             remainingAmount: orderData.sellingPriceLYD || 0, // Start with full amount, deduction happens via transaction
             managerId,
             sequenceNumber: nextSeq, // Store numeric sequence if schema allows, helpful for ordering
-            operationDate: orderData.operationDate || new Date().toISOString()
+            operationDate: orderData.operationDate || new Date().toISOString(),
+            walletAmountUsed: 0 // ✅ Initialize wallet tracking
         };
 
         // 4. Insert
@@ -849,8 +857,108 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
 
         console.log("🟢 [addOrder] Success:", newOrder.invoiceNumber);
 
-        // NEW: Process Down Payment Transaction (User & Order Ledger)
+        // ✅ AUTO-DEDUCT FROM WALLET FOR REMAINING AMOUNT
+        // This happens BEFORE downPaymentLYD processing
+        const currentWalletBalance = await getUserWalletBalance(orderData.userId);
+        console.log(`💰 [addOrder] User wallet balance: ${currentWalletBalance.toFixed(2)} LYD`);
+
+        if (currentWalletBalance !== 0 && finalOrderData.remainingAmount > 0) {
+            // Allow negative balance (user debt)
+            const amountToDeduct = currentWalletBalance > 0
+                ? Math.min(currentWalletBalance, finalOrderData.remainingAmount)
+                : finalOrderData.remainingAmount; // If already negative, add more debt
+
+            console.log(`💳 [addOrder] Auto-deducting ${amountToDeduct.toFixed(2)} LYD from wallet`);
+
+            const walletResult = await addWalletTransaction(
+                orderData.userId,
+                amountToDeduct,
+                'withdrawal',
+                `خصم تلقائي للطلب #${newOrder.invoiceNumber}`,
+                undefined, // managerId
+                undefined, // no paymentMethod for withdrawal
+                undefined  // no treasury card
+            );
+
+            if (walletResult.success) {
+                // Update order with wallet payment info
+                const newRemainingAmount = finalOrderData.remainingAmount - amountToDeduct;
+
+                await supabaseAdmin
+                    .from(ORDERS_COLLECTION)
+                    .update({
+                        walletAmountUsed: amountToDeduct,
+                        remainingAmount: Math.max(0, newRemainingAmount) // Don't allow negative remaining in order
+                    })
+                    .eq('id', newOrder.id);
+
+                console.log(`✅ [addOrder] Wallet deducted. New remaining: ${Math.max(0, newRemainingAmount).toFixed(2)} LYD`);
+
+                // Update local object
+                newOrder.walletAmountUsed = amountToDeduct;
+                newOrder.remainingAmount = Math.max(0, newRemainingAmount);
+            } else {
+                console.warn(`⚠️ [addOrder] Wallet deduction failed: ${walletResult.error}`);
+            }
+        }
+
+        // Process Down Payment with Hybrid Payment System (Wallet + Cash/Card/Dollar)
         if (finalOrderData.downPaymentLYD && finalOrderData.downPaymentLYD > 0) {
+
+            console.log(`💰 [addOrder] Processing payment of ${finalOrderData.downPaymentLYD} LYD`);
+
+            let walletAmount = 0;
+            let cashAmount = finalOrderData.downPaymentLYD;
+
+            // 1. استخدام رصيد المحفظة تلقائياً أولاً
+            const currentBalance = await getUserWalletBalance(orderData.userId);
+            console.log(`💳 [addOrder] Current wallet balance: ${currentBalance} LYD`);
+
+            if (currentBalance > 0) {
+                walletAmount = Math.min(currentBalance, finalOrderData.downPaymentLYD);
+                cashAmount = finalOrderData.downPaymentLYD - walletAmount;
+                console.log(`💳 [addOrder] Hybrid payment: ${walletAmount} from wallet + ${cashAmount} from ${finalOrderData.paymentMethod}`);
+            } else {
+                console.log(`💵 [addOrder] Full payment from ${finalOrderData.paymentMethod}`);
+            }
+
+            // 2. خصم من المحفظة إن وجد رصيد
+            if (walletAmount > 0) {
+                console.log(`💳 [addOrder] Deducting ${walletAmount} from wallet`);
+                const walletResult = await addWalletTransaction(
+                    orderData.userId,
+                    walletAmount,
+                    'withdrawal',
+                    `دفعة ${cashAmount > 0 ? 'جزئية' : 'كاملة'} لطلب #${newOrder.invoiceNumber}`,
+                    undefined, // managerId
+                    undefined, // no paymentMethod for withdrawal
+                    undefined  // no treasury card
+                );
+
+                if (!walletResult.success) {
+                    console.error(`❌ [addOrder] Wallet deduction failed: ${walletResult.error}`);
+                    // ✅ Reset to full cash payment
+                    walletAmount = 0;
+                    cashAmount = finalOrderData.downPaymentLYD;
+                    console.log(`⚠️ [addOrder] Falling back to full cash payment: ${cashAmount} LYD`);
+                } else {
+                    console.log(`✅ [addOrder] Wallet deduction successful`);
+
+                    // ✅ تحديث الطلب بالمبلغ المستخدم من المحفظة
+                    await supabaseAdmin
+                        .from(ORDERS_COLLECTION)
+                        .update({ walletAmountUsed: walletAmount })
+                        .eq('id', newOrder.id);
+                }
+            }
+
+            // 3. تسجيل المعاملة الكاملة في سجل الطلب
+            const paymentDescription = walletAmount > 0 && cashAmount > 0
+                ? `دفعة مختلطة (${walletAmount.toFixed(2)} من المحفظة + ${cashAmount.toFixed(2)} ${getPaymentMethodLabel(finalOrderData.paymentMethod)})`
+                : walletAmount > 0
+                    ? `دفعة كاملة من المحفظة (${walletAmount.toFixed(2)} د.ل)`
+                    : `دفعة ${getPaymentMethodLabel(finalOrderData.paymentMethod)}`;
+
             await addTransaction({
                 orderId: newOrder.id,
                 customerId: orderData.userId,
@@ -858,19 +966,24 @@ export async function addOrder(orderData: Omit<Order, 'id' | 'invoiceNumber'>): 
                 amount: finalOrderData.downPaymentLYD,
                 type: 'payment',
                 date: new Date().toISOString(),
-                status: 'paid', // Transaction is paid
-                description: 'دفعة مقدمة (عربون)'
+                status: 'paid',
+                description: paymentDescription
             });
-        }
+            console.log(`📝 [addOrder] Transaction recorded: ${paymentDescription}`);
 
-        // NEW: Distribute payment to treasury (Company Ledger)
-        if (finalOrderData.downPaymentLYD && finalOrderData.downPaymentLYD > 0 && finalOrderData.paymentMethod) {
-            await distributePayment(
-                newOrder.id,
-                newOrder.invoiceNumber,
-                finalOrderData.paymentMethod as 'cash' | 'card' | 'cash_dollar',
-                finalOrderData.downPaymentLYD
-            );
+            // 4. إضافة المبلغ النقدي فقط للخزينة (إن وجد)
+            if (cashAmount > 0 && finalOrderData.paymentMethod) {
+                console.log(`💵 [addOrder] Adding ${cashAmount} to treasury (${finalOrderData.paymentMethod})`);
+                await distributePayment(
+                    newOrder.id,
+                    newOrder.invoiceNumber,
+                    finalOrderData.paymentMethod as 'cash' | 'card' | 'cash_dollar',
+                    cashAmount // المبلغ النقدي فقط! ليس الإجمالي
+                );
+                console.log(`✅ [addOrder] Treasury updated successfully`);
+            } else if (cashAmount === 0) {
+                console.log(`💡 [addOrder] No cash payment - fully paid from wallet`);
+            }
         }
 
         // 5. Update User Counter (Best effort)
@@ -1115,15 +1228,36 @@ export async function deleteOrder(orderId: string): Promise<boolean> {
         const userId = orderData.userId;
 
         // ===== PAYMENT REVERSAL LOGIC =====
-        // Reverse treasury card payment if down payment was made
-        const downPayment = orderData.downPaymentLYD || orderData.downPayment || 0; // fallback just in case
-        if (downPayment > 0 && orderData.paymentMethod) {
-            console.log(`[deleteOrder] Reversing payment: ${downPayment} LYD via ${orderData.paymentMethod}`);
+
+        // 1. ✅ إرجاع المبلغ المستخدم من المحفظة
+        const walletAmountUsed = orderData.walletAmountUsed || 0;
+        if (walletAmountUsed > 0) {
+            console.log(`[deleteOrder] Refunding ${walletAmountUsed} LYD to wallet`);
+            const refundResult = await addWalletTransaction(
+                userId,
+                walletAmountUsed,
+                'deposit',
+                `استرجاع من حذف الطلب #${orderData.invoiceNumber}`,
+                undefined,
+                undefined,
+                undefined
+            );
+            if (!refundResult.success) {
+                console.error(`❌ [deleteOrder] Wallet refund failed: ${refundResult.error}`);
+            }
+        }
+
+        // 2. Reverse treasury card payment if down payment was made
+        const downPayment = orderData.downPaymentLYD || orderData.downPayment || 0;
+        const cashPortion = downPayment - walletAmountUsed; // ✅ المبلغ النقدي فقط
+
+        if (cashPortion > 0 && orderData.paymentMethod) {
+            console.log(`[deleteOrder] Reversing cash payment: ${cashPortion} LYD via ${orderData.paymentMethod}`);
             await reversePayment(
                 orderId,
                 orderData.invoiceNumber,
                 orderData.paymentMethod as 'cash' | 'card' | 'cash_dollar',
-                downPayment,
+                cashPortion, // ✅ استخدام المبلغ النقدي فقط
                 orderData.exchangeRate
             );
         }
@@ -2290,7 +2424,23 @@ export async function deleteInstantSale(saleId: string): Promise<boolean> {
 }
 
 
+// Get DB document count (pagination helper)
+function getCollectionCount(collectionPath: string) {
+    return async () => {
+        const snapshot = await getDocs(collection(db, collectionPath));
+        return snapshot.size;
+    };
+}
 
+// Helper function to get payment method label in Arabic
+function getPaymentMethodLabel(method?: 'cash' | 'card' | 'cash_dollar'): string {
+    switch (method) {
+        case 'cash': return 'نقدي';
+        case 'card': return 'بطاقة';
+        case 'cash_dollar': return 'دولار';
+        default: return 'غير محدد';
+    }
+}
 
 // --- Product (Inventory) Actions ---
 
@@ -2694,6 +2844,10 @@ export async function addTreasuryTransaction(tx: { amount: number, type: 'deposi
     }
 }
 
+
+
+
+
 export async function getTreasuryTransactions(cardId?: string): Promise<TreasuryTransaction[]> {
     try {
         let query = supabaseAdmin
@@ -2772,6 +2926,7 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
                 await supabaseAdmin.from(SHEIN_TRANSACTIONS_COLLECTION).insert({
                     cardId: card.id,
                     amount: deduct,
+                    type: 'withdrawal', // توضيح أنه سحب من البطاقة
                     orderId: orderId,
                     createdAt: new Date().toISOString()
                 });
@@ -2784,30 +2939,85 @@ export async function processCostDeduction(orderId: string, invoiceNumber: strin
         }
     }
 
-    // 2. Treasury Deduction
+    // 2. Treasury Deduction (with fallback to Shein cards)
     // Use manual treasury amount if provided, otherwise use the remaining cost
     const treasuryDeduction = manualTreasuryAmount !== undefined ? manualTreasuryAmount : remainingCost;
 
     if (treasuryDeduction > 0) {
-        console.log(`[processCostDeduction] Deducting ${treasuryDeduction} from Treasury`);
+        console.log(`[processCostDeduction] Attempting to deduct ${treasuryDeduction} from Treasury`);
 
         // Fetch default USDT/Dollar card
         const { data: treasuryCard } = await supabaseAdmin
             .from(TREASURY_CARDS_COLLECTION)
-            .select('id')
-            .eq('type', 'cash_dollar')
+            .select('id, balance')
+            .eq('type', 'usdt_treasury')
             .single();
 
         if (treasuryCard) {
-            await addTreasuryTransaction({
-                amount: -treasuryDeduction,
-                type: 'withdrawal',
-                description: `Auto-deduction for Order #${invoiceNumber} (Amt: ${treasuryDeduction})`,
-                relatedOrderId: orderId,
-                cardId: treasuryCard.id
-            });
+            const currentBalance = treasuryCard.balance || 0;
+
+            if (currentBalance < treasuryDeduction) {
+                // ⚠️ رصيد الخزينة غير كافٍ - محاولة الاستعانة ببطاقات شين
+                console.warn(`[processCostDeduction] Treasury balance insufficient (${currentBalance.toFixed(2)}$ < ${treasuryDeduction.toFixed(2)}$)`);
+                console.log(`[processCostDeduction] Attempting to use available Shein cards as fallback...`);
+
+                // البحث عن بطاقات شين متاحة
+                const fallbackResult = await findBestSheinCards(treasuryDeduction);
+
+                if (fallbackResult.coveredAmount >= treasuryDeduction) {
+                    // ✅ يمكن تغطية المبلغ من بطاقات شين
+                    console.log(`[processCostDeduction] Found ${fallbackResult.allocations.length} Shein card(s) to cover $${treasuryDeduction.toFixed(2)}`);
+
+                    // الخصم من بطاقات شين
+                    for (const allocation of fallbackResult.allocations) {
+                        const card = allocation.card;
+                        const deductAmount = allocation.amount;
+                        const currentRemaining = card.remainingValue ?? card.value;
+                        const newRemaining = currentRemaining - deductAmount;
+
+                        console.log(`[processCostDeduction] Deducting $${deductAmount.toFixed(2)} from Shein Card ${card.code}`);
+
+                        await updateSheinCard(card.id, {
+                            remainingValue: newRemaining,
+                            status: (newRemaining < 0.01) ? 'used' : 'available',
+                            usedAt: new Date().toISOString(),
+                            usedForOrderId: orderId
+                        });
+
+                        // تسجيل المعاملة
+                        await supabaseAdmin.from(SHEIN_TRANSACTIONS_COLLECTION).insert({
+                            cardId: card.id,
+                            amount: deductAmount,
+                            type: 'withdrawal',
+                            orderId: orderId,
+                            createdAt: new Date().toISOString()
+                        });
+                    }
+
+                    console.log(`✅ [processCostDeduction] Successfully deducted ${treasuryDeduction.toFixed(2)}$ from Shein cards (fallback)`);
+                } else {
+                    // ❌ لا يوجد رصيد كافٍ في بطاقات شين أيضاً
+                    const totalAvailable = currentBalance + fallbackResult.coveredAmount;
+                    const errorMsg = `رصيد غير كافٍ. الرصيد المتاح: ${totalAvailable.toFixed(2)}$ (خزينة: ${currentBalance.toFixed(2)}$ + بطاقات: ${fallbackResult.coveredAmount.toFixed(2)}$)، المطلوب: ${treasuryDeduction.toFixed(2)}$`;
+                    console.error(`[processCostDeduction] ${errorMsg}`);
+                    throw new Error(errorMsg);
+                }
+            } else {
+                // ✅ رصيد الخزينة كافٍ - الخصم العادي
+                await addTreasuryTransaction({
+                    amount: treasuryDeduction,
+                    type: 'withdrawal',
+                    description: `Auto-deduction for Order #${invoiceNumber} (Amt: ${treasuryDeduction})`,
+                    relatedOrderId: orderId,
+                    cardId: treasuryCard.id
+                });
+
+                console.log(`✅ [processCostDeduction] Successfully deducted ${treasuryDeduction} from Treasury`);
+            }
         } else {
-            console.error("[processCostDeduction] Failed: No 'cash_dollar' treasury card found.");
+            const errorMsg = "لم يتم العثور على خزينة USDT";
+            console.error(`[processCostDeduction] ${errorMsg}`);
+            throw new Error(errorMsg);
         }
     } else {
         console.log(`[processCostDeduction] No treasury deduction needed.`);
@@ -2867,7 +3077,7 @@ export async function getTreasuryCardById(cardId: string): Promise<TreasuryCard 
 }
 
 export async function addTreasuryCardTransaction(
-    cardType: 'cash_libyan' | 'bank' | 'cash_dollar',
+    cardType: 'cash_libyan' | 'bank' | 'usdt_treasury',
     amount: number,
     type: 'deposit' | 'withdrawal',
     description: string
@@ -2952,7 +3162,7 @@ export async function distributePayment(
                 console.log(`[distributePayment] Converting ${amountLYD} LYD to ${amountUSD.toFixed(2)} USD (rate: ${exchangeRate})`);
 
                 await addTreasuryCardTransaction(
-                    'cash_dollar',
+                    'usdt_treasury',
                     amountUSD,
                     'deposit',
                     `Payment from Order #${invoiceNumber} (${amountLYD} LYD ÷ ${exchangeRate} = ${amountUSD.toFixed(2)} USD)`
@@ -3036,7 +3246,7 @@ export async function reversePayment(
                 console.log(`[reversePayment] Converting ${amountLYD} LYD to ${amountUSD.toFixed(2)} USD (rate: ${exchangeRate})`);
 
                 await addTreasuryCardTransaction(
-                    'cash_dollar',
+                    'usdt_treasury',
                     amountUSD,
                     'withdrawal',
                     `Reversal: Order Deleted #${invoiceNumber} (-${amountUSD.toFixed(2)} USD)`
@@ -3085,6 +3295,21 @@ export async function addWalletTransaction(
     treasuryCardId?: string // Optional: specific card to deposit into
 ): Promise<{ success: boolean; error?: string }> {
     try {
+        // ✅ Allow negative balance to represent user debt
+        // Balance check has been disabled
+        /*
+        if (type === 'withdrawal') {
+            const currentBalance = await getUserWalletBalance(userId);
+            if (currentBalance < amount) {
+                console.error(`❌ [addWalletTransaction] Insufficient balance: ${currentBalance} < ${amount}`);
+                return {
+                    success: false,
+                    error: `رصيد المحفظة غير كافٍ (الرصيد: ${currentBalance.toFixed(2)}، المطلوب: ${amount.toFixed(2)})`
+                };
+            }
+        }
+        */
+
         // 1. Add Transaction
         const { error: txError } = await supabaseAdmin
             .from('wallet_transactions_v4')
@@ -3308,6 +3533,22 @@ export async function saveOrderWeight(
                 date: new Date().toISOString(),
                 status: 'completed'
             });
+
+            // ✅ تحديث الخزينة إذا كان هنالك تخفيض في السعر
+            if (diff < 0 && order.paymentMethod && order.downPaymentLYD > 0) {
+                // تخفيض في السعر = رد جزئي
+                const refundAmount = Math.min(Math.abs(diff), order.downPaymentLYD);
+                console.log(`[saveOrderWeight] Refunding ${refundAmount} LYD to treasury due to price reduction`);
+
+                await reversePayment(
+                    orderId,
+                    order.invoiceNumber,
+                    order.paymentMethod as 'cash' | 'card' | 'cash_dollar',
+                    refundAmount,
+                    order.exchangeRate
+                );
+            }
+            // ملاحظة: إذا زاد السعر (diff > 0), فقط نزيد الدين، لا نحصّل الآن
         }
 
         return { success: true };
@@ -3362,18 +3603,19 @@ export async function performFactoryReset(password: string, managerId: string): 
         console.log(`FACTORY RESET requested by ${managerId}`);
 
         // 2. Clear All Transactional Tables
+        // IMPORTANT: Delete child tables (with foreign keys) BEFORE parent tables
         const tablesToClear = [
-            ORDERS_COLLECTION,              // Delete All Orders
-            TEMP_ORDERS_COLLECTION,         // Delete All Temp Orders
-            TRANSACTIONS_COLLECTION,        // Delete All User Transactions
-            EXPENSES_COLLECTION,            // Delete All Expenses
-            'wallet_transactions_v4',       // Delete Wallet Logs
-            'treasury_transactions_v4',     // Delete Treasury Logs
-            SHEIN_TRANSACTIONS_COLLECTION,  // Delete Shein Card Usage Logs
-            DEPOSITS_COLLECTION,            // Delete Deposits (Arboon)
-            EXTERNAL_DEBTS_COLLECTION,      // Delete Creditor Transactions
-            INSTANT_SALES_COLLECTION,       // Delete Instant Sales
-            MANUAL_LABELS_COLLECTION        // Delete Shipping Labels
+            TRANSACTIONS_COLLECTION,        // ✓ Delete transactions FIRST (has FK to orders)
+            TEMP_ORDERS_COLLECTION,         // ✓ Delete temp orders
+            EXPENSES_COLLECTION,            // ✓ Delete expenses
+            'wallet_transactions_v4',       // ✓ Delete wallet logs
+            'treasury_transactions_v4',     // ✓ Delete treasury logs (has FK to orders)
+            SHEIN_TRANSACTIONS_COLLECTION,  // ✓ Delete Shein card usage logs (has FK to cards)
+            DEPOSITS_COLLECTION,            // ✓ Delete deposits
+            EXTERNAL_DEBTS_COLLECTION,      // ✓ Delete creditor transactions
+            INSTANT_SALES_COLLECTION,       // ✓ Delete instant sales
+            MANUAL_LABELS_COLLECTION,       // ✓ Delete shipping labels
+            ORDERS_COLLECTION,              // ✓ Delete orders LAST (parent table)
         ];
 
         for (const table of tablesToClear) {

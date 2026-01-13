@@ -109,7 +109,7 @@ export default function SheinCardDetailsPage({ params }: { params: { id: string 
                     </CardHeader>
                     <CardContent>
                         <Badge className={`text-base ${card.status === 'available' ? 'bg-green-100 text-green-800' :
-                                card.status === 'used' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
+                            card.status === 'used' ? 'bg-gray-100 text-gray-800' : 'bg-red-100 text-red-800'
                             }`}>
                             {displayStatus}
                         </Badge>

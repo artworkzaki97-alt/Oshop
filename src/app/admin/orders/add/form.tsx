@@ -27,6 +27,7 @@ import {
     addExpense,
     getAppSettings,
     getOrderById,
+    deleteOrder,
     getTempOrders,
     updateTempOrder,
     distributePayment
@@ -96,6 +97,8 @@ const AddOrderForm = () => {
     const [isAnalyzingCards, setIsAnalyzingCards] = useState<boolean>(false); // Keep for loading state if needed
     const [manualCardAmount, setManualCardAmount] = useState<number | null>(null);
     const [manualTreasuryAmount, setManualTreasuryAmount] = useState<number | null>(null);
+    const [selectedUserWalletBalance, setSelectedUserWalletBalance] = useState<number>(0);
+    const [isFreeShipping, setIsFreeShipping] = useState(false);
 
     const [isUploading, setIsUploading] = useState(false);
 
@@ -215,6 +218,7 @@ const AddOrderForm = () => {
             setCustomerName(selectedUser.name);
             setCustomerPhone(selectedUser.phone);
             setCustomerAddress(selectedUser.address || '');
+            setSelectedUserWalletBalance(selectedUser.walletBalance || 0);
         }
         setIsUserSearchOpen(false);
     };
@@ -289,8 +293,23 @@ const AddOrderForm = () => {
         return addedCost;
     }, [addedCost, addedCostCurrency, appSettings, costExchangeRate]);
 
-    const finalSellingPrice = useMemo(() => sellingPriceLYD + customerWeightCostLYD + addedCostLYD, [sellingPriceLYD, customerWeightCostLYD, addedCostLYD]);
+    const finalSellingPrice = useMemo(() => {
+        const basePrice = sellingPriceLYD + addedCostLYD;
+        // إضافة تكلفة الشحن فقط إذا لم يكن مجانياً
+        const shippingCost = isFreeShipping ? 0 : customerWeightCostLYD;
+        return basePrice + shippingCost;
+    }, [sellingPriceLYD, customerWeightCostLYD, addedCostLYD, isFreeShipping]);
     const remainingAmount = useMemo(() => finalSellingPrice - downPaymentLYD, [finalSellingPrice, downPaymentLYD]);
+
+    // حساب الدفع المختلط (محفظة + نقدي)
+    const walletPaymentAmount = useMemo(() => {
+        if (!selectedUserId || downPaymentLYD <= 0) return 0;
+        return Math.min(selectedUserWalletBalance, downPaymentLYD);
+    }, [selectedUserWalletBalance, downPaymentLYD, selectedUserId]);
+
+    const cashPaymentAmount = useMemo(() => {
+        return Math.max(0, downPaymentLYD - walletPaymentAmount);
+    }, [downPaymentLYD, walletPaymentAmount]);
     const netProfit = useMemo(() => finalSellingPrice - purchaseCostLYD - shippingCostLYD, [finalSellingPrice, purchaseCostLYD, shippingCostLYD]);
 
 
@@ -374,6 +393,9 @@ const AddOrderForm = () => {
             cartUrl: cartUrl,
             siteId: globalSites.find(s => s.id === selectedStore)?.id,
             store: selectedStore === 'other' ? manualStoreName : (globalSites.find(s => s.id === selectedStore)?.name || selectedStore),
+
+            // ✅ تم إضافة isFreeShipping لقاعدة البيانات
+            isFreeShipping,
         };
 
         try {
@@ -417,20 +439,29 @@ const AddOrderForm = () => {
                         manualCardAmount ?? undefined,
                         manualTreasuryAmount ?? undefined
                     );
-                } catch (deductError) {
+                } catch (deductError: any) {
                     console.error("Deduction Error:", deductError);
-                    toast({ title: "تحذير", description: "تم حفظ الطلب لكن فشل خصم التكلفة.", variant: "destructive" });
+
+                    // حذف الطلب المحفوظ لأن الخصم فشل
+                    try {
+                        await deleteOrder(savedOrder.id);
+                    } catch (deleteError) {
+                        console.error("Failed to delete order:", deleteError);
+                    }
+
+                    toast({
+                        title: "خطأ في الخصم",
+                        description: deductError.message || "فشل خصم التكلفة. تم إلغاء الطلب.",
+                        variant: "destructive"
+                    });
+
+                    setIsSaving(false);
+                    return; // إيقاف العملية
                 }
                 // -----------------------------
 
-                // --- PAYMENT DISTRIBUTION ---
-                try {
-                    await distributePayment(savedOrder.id, savedOrder.invoiceNumber, paymentMethod, downPaymentLYD);
-                } catch (paymentError) {
-                    console.error("Payment Distribution Error:", paymentError);
-                    toast({ title: "تحذير", description: "تم حفظ الطلب لكن فشل توزيع الدفعة.", variant: "destructive" });
-                }
-                // ---------------------------
+                // ملاحظة: distributePayment يُستدعى تلقائياً داخل addOrder
+                // لا حاجة لاستدعائه مرة أخرى هنا لتجنب التكرار
 
                 toast({ title: "تم الحفظ بنجاح", description: "تم تسجيل العملية الجديدة في النظام." });
             }
@@ -600,9 +631,30 @@ const AddOrderForm = () => {
                         <FormField label="سعر البيع الأساسي (دينار)" id="selling-price-lyd">
                             <Input type="number" id="selling-price-lyd" value={sellingPriceLYD || ''} onChange={e => setSellingPriceLYD(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
                         </FormField>
-                        <FormField label="المقدم (دينار)" id="down-payment-lyd">
-                            <Input type="number" id="down-payment-lyd" value={downPaymentLYD || ''} onChange={e => setDownPaymentLYD(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
-                        </FormField>
+                        <div className="space-y-2">
+                            <FormField label="المقدم (دينار)" id="down-payment-lyd">
+                                <Input type="number" id="down-payment-lyd" value={downPaymentLYD || ''} onChange={e => setDownPaymentLYD(e.target.value === '' ? 0 : parseFloat(e.target.value))} dir="ltr" />
+                            </FormField>
+                            {selectedUserId && downPaymentLYD > 0 && walletPaymentAmount > 0 && (
+                                <div className="text-sm space-y-1 p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                                    <div className="font-semibold text-emerald-700 dark:text-emerald-400 mb-2">توزيع المبلغ المدفوع:</div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">من المحفظة:</span>
+                                        <span className="font-bold text-emerald-600">{walletPaymentAmount.toFixed(2)} د.ل</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">{paymentMethod === 'cash' ? 'نقدي' : paymentMethod === 'card' ? 'بطاقة' : 'دولار'}:</span>
+                                        <span className="font-bold text-blue-600">{cashPaymentAmount.toFixed(2)} د.ل</span>
+                                    </div>
+                                    <div className="border-t border-emerald-200 dark:border-emerald-800 pt-1 mt-1">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold">الإجمالي:</span>
+                                            <span className="font-bold">{downPaymentLYD.toFixed(2)} د.ل</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4 pt-4 items-start">
                         <div className="space-y-2">
@@ -633,7 +685,7 @@ const AddOrderForm = () => {
                     </div>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
                         <FormField label="طريقة السداد" id="payment-method">
-                            <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as 'cash' | 'card' | 'cash_dollar')} className="flex gap-4 pt-2">
+                            <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as 'cash' | 'card' | 'cash_dollar')} className="flex gap-4 pt-2 flex-wrap">
                                 <div className="flex items-center space-x-2 space-x-reverse">
                                     <RadioGroupItem value="cash" id="cash" />
                                     <Label htmlFor="cash">نقدي</Label>
@@ -647,6 +699,11 @@ const AddOrderForm = () => {
                                     <Label htmlFor="cash_dollar">دولار كاش</Label>
                                 </div>
                             </RadioGroup>
+                            {selectedUserId && selectedUserWalletBalance > 0 && (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    💡 سيتم استخدام رصيد المحفظة ({selectedUserWalletBalance.toFixed(2)} د.ل) تلقائياً أولاً
+                                </p>
+                            )}
                         </FormField>
                         <FormField label="حالة الشحنة" id="shipment-status">
                             <Select value={status} onValueChange={(value: OrderStatus) => setStatus(value)}>
@@ -942,7 +999,18 @@ const AddOrderForm = () => {
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label>سعر الكيلو (للزبون)</Label>
+                            <div className="flex items-center justify-between">
+                                <Label>سعر الكيلو (للزبون)</Label>
+                                <Button
+                                    type="button"
+                                    variant={isFreeShipping ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setIsFreeShipping(!isFreeShipping)}
+                                    className="h-7 text-xs"
+                                >
+                                    {isFreeShipping ? "✅" : "🎁"} شحن مجاني
+                                </Button>
+                            </div>
                             <div className="flex gap-2">
                                 <Input
                                     type="number"
@@ -950,6 +1018,7 @@ const AddOrderForm = () => {
                                     onChange={e => setCustomerWeightCost(e.target.value === '' ? 0 : parseFloat(e.target.value))}
                                     dir="ltr"
                                     className="w-full"
+                                    disabled={isFreeShipping}
                                 />
                                 <RadioGroup value={customerWeightCostCurrency} onValueChange={(val) => setCustomerWeightCostCurrency(val as 'LYD' | 'USD')} className="flex gap-2 items-center border p-2 rounded-md bg-background">
                                     <div className="flex items-center space-x-2 space-x-reverse">

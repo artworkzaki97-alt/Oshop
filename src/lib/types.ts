@@ -94,6 +94,13 @@ export interface Order {
   customerPhone?: string;
   collectedAmount?: number;
   customerWeightCostUSD?: number;
+
+  // حقول الدفع المفصلة (للبوليصة)
+  cashPaymentAmount?: number;      // المبلغ المدفوع نقدي/بطاقة/دولار
+  walletPaymentAmount?: number;    // المبلغ المدفوع من المحفظة
+
+  // خيار الشحن المجاني
+  isFreeShipping?: boolean;        // هل الشحن مجاني للزبون؟
 }
 
 

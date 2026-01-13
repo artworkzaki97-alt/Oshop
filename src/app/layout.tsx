@@ -30,11 +30,13 @@ if (typeof window === 'undefined') {
 }
 
 
+
 const cairo = Cairo({
   subsets: ['arabic', 'latin'],
   display: 'swap',
   variable: '--font-cairo',
 });
+
 
 export const metadata: Metadata = {
   title: "Oshop",
@@ -48,11 +50,11 @@ export default function RootLayout({
 }>) {
 
   return (
-    <html lang="ar" dir="rtl" className={cairo.variable} suppressHydrationWarning>
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
         {/* Next.js will automatically handle the favicon if it's placed in the app directory. */}
       </head>
-      <body className={cn("min-h-screen bg-background font-sans antialiased")} suppressHydrationWarning>
+      <body className={cn("min-h-screen bg-background font-sans antialiased", cairo.variable)} suppressHydrationWarning>
         {children}
         <Toaster />
       </body>
