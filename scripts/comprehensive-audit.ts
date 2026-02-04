@@ -322,7 +322,7 @@ async function generateSummary() {
     } else {
         console.log('\n⚠️  ISSUES REQUIRE ATTENTION');
         console.log('\nIssues by Category:');
-        const categories = [...new Set(issues.map(i => i.category))];
+        const categories = Array.from(new Set(issues.map(i => i.category)));
         for (const cat of categories) {
             const catIssues = issues.filter(i => i.category === cat);
             console.log(`  ${cat}: ${catIssues.length} issues`);
