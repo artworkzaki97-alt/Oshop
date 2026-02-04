@@ -81,7 +81,7 @@ export default function NewJournalEntryPage() {
             const acc = MOCK_ACCOUNTS.find(a => a.id === l.accountId);
             return {
                 ...l,
-                accountType: acc?.type || 'asset', // Fallback
+                accountType: (acc?.type || 'asset') as AccountType, // Explicit cast to fix build error
                 debit: Number(l.debit),
                 credit: Number(l.credit)
             };
